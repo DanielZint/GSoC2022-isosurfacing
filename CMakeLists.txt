@@ -41,16 +41,28 @@ find_package(OpenMP)
 # Creating entries for target: Isosurfacing
 # ############################
 
-file(GLOB SOURCES Isosurfacing_3/*.h Isosurfacing_3/*/*.h Isosurfacing_3/*/*/*.h Isosurfacing_3/*.cpp)
+file(GLOB SOURCES 
+  Isosurfacing_3/*.h 
+  Isosurfacing_3/*/*.h 
+  Isosurfacing_3/*/*/*.h 
+)
 
-add_executable( Isosurfacing  ${SOURCES} )
+file(GLOB EXECUTABLES Isosurfacing_3/*.cpp)
 
-add_to_cached_list( CGAL_EXECUTABLE_TARGETS Isosurfacing )
+foreach(exec ${EXECUTABLES})
+  get_filename_component(exec_name ${exec} NAME_WE)
+  message(STATUS "Add executable ${exec_name}")
+  
+  add_executable( ${exec_name} ${SOURCES} ${exec} )
 
-# Link the executable to CGAL and third-party libraries
-target_link_libraries( Isosurfacing PRIVATE CGAL::CGAL )
+  #add_to_cached_list( CGAL_EXECUTABLE_TARGETS ${exec_name} )
 
-if(OpenMP_CXX_FOUND)
-    target_link_libraries( Isosurfacing PRIVATE OpenMP::OpenMP_CXX )
-endif()
+  # Link the executable to CGAL and third-party libraries
+  target_link_libraries( ${exec_name} PRIVATE CGAL::CGAL )
+
+  if(OpenMP_CXX_FOUND)
+      target_link_libraries( ${exec_name} PRIVATE OpenMP::OpenMP_CXX )
+  endif()
+  
+endforeach()
 
