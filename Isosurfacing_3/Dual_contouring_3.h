@@ -21,7 +21,7 @@ namespace CGAL {
     /// <param name="j"></param>
     /// <param name="k"></param>
     /// <returns> true, if there is a point in the cell</returns>
-    template<class Domain_>
+    template<class Domain_, bool use_bbox = false>
     bool get_vertex_position( const Domain_& domain, const typename Domain_::FT iso_value, const std::size_t& i, const std::size_t& j,
                               const std::size_t& k, typename Domain_::Point_3& point ) {
         typedef typename Domain_::Point_3 Point_3;
@@ -199,7 +199,7 @@ namespace CGAL {
         }
 
         // bbox
-        if( false ) {
+        if constexpr( use_bbox ) {
             CGAL::Bbox_3 bbox = ( CGAL::ORIGIN + pos[0] ).bbox() + ( CGAL::ORIGIN + pos[7] ).bbox();
 
             FT x  = std::min<FT>( std::max<FT>( point.x(), bbox.xmin() ), bbox.xmax() );
@@ -213,7 +213,7 @@ namespace CGAL {
 
     template<class Domain_, class PointRange, class PolygonRange>
     void make_quad_mesh_using_dual_contouring( const Domain_& domain, const typename Domain_::FT iso_value, PointRange& points,
-                                               PolygonRange& polygons ) {
+                                               PolygonRange& polygons, const bool use_bbox = false ) {
         typedef typename Domain_::FT FT;
         typedef typename Domain_::Point_3 Point_3;
 
@@ -230,14 +230,29 @@ namespace CGAL {
         const std::size_t size_i = domain.size_z();
 
         // save all points
-        for( int k = 0; k < size_k - 1; k++ ) {
-            for( int j = 0; j < size_j - 1; j++ ) {
-                for( int i = 0; i < size_i - 1; i++ ) {
-                    const size_t voxel_id = domain.lex_index( i, j, k );
-                    Point_3 p;
-                    if( get_vertex_position( domain, iso_value, i, j, k, p ) ) {
-                        map_voxel_to_point[voxel_id]    = p;
-                        map_voxel_to_point_id[voxel_id] = points_counter++;
+        if( use_bbox ) {
+            for( int k = 0; k < size_k - 1; k++ ) {
+                for( int j = 0; j < size_j - 1; j++ ) {
+                    for( int i = 0; i < size_i - 1; i++ ) {
+                        const size_t voxel_id = domain.lex_index( i, j, k );
+                        Point_3 p;
+                        if( get_vertex_position<Domain_, true>( domain, iso_value, i, j, k, p ) ) {
+                            map_voxel_to_point[voxel_id]    = p;
+                            map_voxel_to_point_id[voxel_id] = points_counter++;
+                        }
+                    }
+                }
+            }
+        } else {
+            for( int k = 0; k < size_k - 1; k++ ) {
+                for( int j = 0; j < size_j - 1; j++ ) {
+                    for( int i = 0; i < size_i - 1; i++ ) {
+                        const size_t voxel_id = domain.lex_index( i, j, k );
+                        Point_3 p;
+                        if( get_vertex_position( domain, iso_value, i, j, k, p ) ) {
+                            map_voxel_to_point[voxel_id]    = p;
+                            map_voxel_to_point_id[voxel_id] = points_counter++;
+                        }
                     }
                 }
             }
@@ -247,7 +262,6 @@ namespace CGAL {
         for( int k = 0; k < size_k - 1; k++ ) {
             for( int j = 0; j < size_j - 1; j++ ) {
                 for( int i = 0; i < size_i - 1; i++ ) {
-
                     const double s0 = domain.value( i + 0, j + 0, k + 0 );
                     const double s1 = domain.value( i + 1, j + 0, k + 0 );
                     const double s2 = domain.value( i + 0, j + 1, k + 0 );
