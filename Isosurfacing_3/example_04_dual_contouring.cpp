@@ -46,13 +46,13 @@ int main() {
     Point_range points;
     Polygon_range polygons;
 
-    std::cout << "Run MC" << std::endl;
+    std::cout << "Run DC" << std::endl;
     CGAL::make_quad_mesh_using_dual_contouring( grid_oracle, 0.8, points, polygons );
 
-    Mesh mesh_output;
-    CGAL::Polygon_mesh_processing::polygon_soup_to_polygon_mesh( points, polygons, mesh_output );
+    // Mesh mesh_output;
+    // CGAL::Polygon_mesh_processing::polygon_soup_to_polygon_mesh( points, polygons, mesh_output );
 
-    CGAL::IO::write_OFF( "result.off", mesh_output );
+    CGAL::IO::write_OFF( "result.off", points, polygons );
 
     // write_off("result.off", result);
 }
