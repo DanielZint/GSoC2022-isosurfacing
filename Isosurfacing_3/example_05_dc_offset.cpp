@@ -1,7 +1,6 @@
 #include "Cartesian_grid_3.h"
 #include "Cartesian_grid_oracle.h"
-#include "Function_oracle.h"
-#include "Marching_cubes_3.h"
+#include "Dual_contouring_3.h"
 #include "types.h"
 
 #include <CGAL/AABB_face_graph_triangle_primitive.h>
@@ -29,9 +28,9 @@ inline Kernel::FT distance_to_mesh( const Tree& tree, const Point_3& p ) {
 }
 
 int main() {
-    const std::string input_name = "D:/Documents/Projects/GSoC2022-isosurfacing-fork/mc_sphere_50.off";
+    const std::string input_name = "D:/Documents/Projects/GSoC2022-isosurfacing-fork/bunny.off";
     const int n_voxels           = 50;
-    const FT offset_value        = 0.4;
+    const FT offset_value        = 0.02;
 
     Mesh mesh_input;
     if( !CGAL::IO::read_OFF( input_name, mesh_input ) ) {
@@ -60,7 +59,7 @@ int main() {
     const std::size_t size_j = grid.ydim();
     const std::size_t size_i = grid.zdim();
 
-    #pragma omp parallel for
+#pragma omp parallel for
     for( int z = 0; z < grid.zdim(); z++ ) {
         for( int y = 0; y < grid.ydim(); y++ ) {
             for( int x = 0; x < grid.xdim(); x++ ) {
@@ -77,10 +76,8 @@ int main() {
     Point_range points;
     Polygon_range polygons;
 
-    std::cout << "Run MC" << std::endl;
-    CGAL::make_triangle_mesh_using_marching_cubes( grid_oracle, offset_value, points, polygons );
-
-    // TODO: compare results with mesh_3
+    std::cout << "Run DC" << std::endl;
+    CGAL::make_quad_mesh_using_dual_contouring( grid_oracle, offset_value, points, polygons );
 
     Mesh mesh_output;
     CGAL::Polygon_mesh_processing::polygon_soup_to_polygon_mesh( points, polygons, mesh_output );
