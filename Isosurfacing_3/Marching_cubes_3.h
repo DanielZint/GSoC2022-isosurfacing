@@ -20,20 +20,13 @@ namespace CGAL {
         const std::size_t size_j = domain.size_y();
         const std::size_t size_i = domain.size_z();
 
-        const std::size_t blocking_size = 100;
-
         // TODO: look at polygon mesh processing for tbb (also linking)
 
-#pragma omp parallel for
-        for( int bj = 1; bj < size_j - 1; bj += blocking_size ) {
-            for( int k = 1; k < size_k - 1; k++ ) {
-                const std::size_t j_start = bj;
-                const std::size_t j_end   = std::min( size_j - 1, bj + blocking_size );
-
-                for( std::size_t j = j_start; j < j_end; j++ ) {
-                    for( std::size_t i = 1; i < size_i - 1; i++ ) {
-                        internal::Marching_cubes_3::marching_cubes_cell( i, j, k, domain, iso_value, points, polygons, mutex );
-                    }
+        #pragma omp parallel for
+        for( int k = 0; k < size_k - 1; k++ ) {
+            for( int j = 0; j < size_j - 1; j++ ) {
+                for( int i = 0; i < size_i - 1; i++ ) {
+                    internal::Marching_cubes_3::marching_cubes_cell( i, j, k, domain, iso_value, points, polygons, mutex );
                 }
             }
         }
