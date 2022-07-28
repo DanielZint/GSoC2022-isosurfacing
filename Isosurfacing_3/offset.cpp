@@ -46,7 +46,7 @@ int main( int argc, char** argv ) {
     app.add_flag( "--inside{1},--outside{2},--doublesided{0},--is{1},--os{2},--ds{0}", inside_outside,
                   "Compute the offset on the inside, outside or both sides of the mesh" )
         ->default_val( 0 );
-    app.add_flag( "--bbox", use_bbox, "Make sure that vertices stay inside there voxel when using Dual Contouring" )->default_val( false );
+    app.add_flag( "--bbox", use_bbox, "Make sure that vertices stay inside their voxel when using Dual Contouring" )->default_val( false );
 
     CLI11_PARSE( app, argc, argv );
 
