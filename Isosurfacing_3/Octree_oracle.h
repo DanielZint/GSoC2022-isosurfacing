@@ -1,29 +1,30 @@
-#ifndef CGAL_CARTESIAN_GRID_ORACLE_H
-#define CGAL_CARTESIAN_GRID_ORACLE_H
+#ifndef CGAL_OCTREE_GRID_ORACLE_H
+#define CGAL_OCTREE_GRID_ORACLE_H
 
-#include "Cartesian_grid_3.h"
+#include "Octree_wrapper.h"
+
+#include "types.h"
 
 #include <array>
 
 namespace CGAL {
 
-    template<class GeomTraits>
-    class Cartesian_grid_oracle {
+    class Octree_oracle {
       public:
-        typedef GeomTraits Geom_traits;
+        typedef Kernel Geom_traits;
         typedef typename Geom_traits::FT FT;
         typedef typename Geom_traits::Point_3 Point_3;
         typedef typename Geom_traits::Vector_3 Vector_3;
 
       public:
-        Cartesian_grid_oracle( const Cartesian_grid_3<Geom_traits>& grid ) : grid( &grid ) {}
+        Octree_oracle( const OctreeWrapper& octree ) : octree_( &octree ) {}
 
-        std::size_t size_x() const { return grid->xdim(); }
-        std::size_t size_y() const { return grid->ydim(); }
-        std::size_t size_z() const { return grid->zdim(); }
+        std::size_t size_x() const { return octree_->dim() + 1; }
+        std::size_t size_y() const { return octree_->dim() + 1; }
+        std::size_t size_z() const { return octree_->dim() + 1; }
 
         std::size_t lex_index( const std::size_t& i, const std::size_t& j, const std::size_t& k ) const {
-            return k * grid->zdim() * grid->ydim() + j * grid->xdim() + i;
+            return k * size_z() * size_y() + j * size_x() + i;
         }
 
         /// <summary>
@@ -48,65 +49,67 @@ namespace CGAL {
                        const std::size_t& k ) const {
             auto index = []( const int dim, const int ii ) { return ( ii < 0 ? 0 : ii >= dim ? ( dim - 1 ) : ii ); };
 
-            const FT& dx = grid->voxel_x();
-            const FT& dy = grid->voxel_y();
-            const FT& dz = grid->voxel_z();
+            const FT& dx = octree_->hx();
+            const FT& dy = octree_->hx();
+            const FT& dz = octree_->hx();
+
+            const std::size_t dim = octree_->dim() + 1;
 
             // vertex 0
-            n[0] = { 0.5f * ( s[1] - value( index( grid->xdim(), i - 1 ), j, k ) ) / dx,
-                     0.5f * ( s[2] - value( i, index( grid->ydim(), j - 1 ), k ) ) / dy,
-                     0.5f * ( s[4] - value( i, j, index( grid->zdim(), k - 1 ) ) ) / dz };
+            n[0] = { 0.5f * ( s[1] - value( index( dim, i - 1 ), j, k ) ) / dx,
+                     0.5f * ( s[2] - value( i, index( dim, j - 1 ), k ) ) / dy,
+                     0.5f * ( s[4] - value( i, j, index( dim, k - 1 ) ) ) / dz };
 
             // vertex 1
-            n[1] = { 0.5f * ( value( index( grid->xdim(), i + 2 ), j, k ) - s[0] ) / dx,
-                     0.5f * ( s[3] - value( i + 1, index( grid->ydim(), j - 1 ), k ) ) / dy,
-                     0.5f * ( s[5] - value( i + 1, j, index( grid->zdim(), k - 1 ) ) ) / dz };
+            n[1] = { 0.5f * ( value( index( dim, i + 2 ), j, k ) - s[0] ) / dx,
+                     0.5f * ( s[3] - value( i + 1, index( dim, j - 1 ), k ) ) / dy,
+                     0.5f * ( s[5] - value( i + 1, j, index( dim, k - 1 ) ) ) / dz };
 
             // vertex 2
-            n[2] = { 0.5f * ( s[3] - value( index( grid->xdim(), i - 1 ), j + 1, k ) ) / dx,
-                     0.5f * ( value( i, index( grid->ydim(), j + 2 ), k ) - s[0] ) / dy,
-                     0.5f * ( s[6] - value( i, j + 1, index( grid->zdim(), k - 1 ) ) ) / dz };
+            n[2] = { 0.5f * ( s[3] - value( index( dim, i - 1 ), j + 1, k ) ) / dx,
+                     0.5f * ( value( i, index( dim, j + 2 ), k ) - s[0] ) / dy,
+                     0.5f * ( s[6] - value( i, j + 1, index( dim, k - 1 ) ) ) / dz };
 
             // vertex 3
-            n[3] = { 0.5f * ( value( index( grid->xdim(), i + 2 ), j + 1, k ) - s[2] ) / dx,
-                     0.5f * ( value( i + 1, index( grid->ydim(), j + 2 ), k ) - s[1] ) / dy,
-                     0.5f * ( s[7] - value( i + 1, j + 1, index( grid->zdim(), k - 1 ) ) ) / dz };
+            n[3] = { 0.5f * ( value( index( dim, i + 2 ), j + 1, k ) - s[2] ) / dx,
+                     0.5f * ( value( i + 1, index( dim, j + 2 ), k ) - s[1] ) / dy,
+                     0.5f * ( s[7] - value( i + 1, j + 1, index( dim, k - 1 ) ) ) / dz };
 
             // vertex 4
-            n[4] = { 0.5f * ( s[5] - value( index( grid->xdim(), i - 1 ), j, k + 1 ) ) / dx,
-                     0.5f * ( s[6] - value( i, index( grid->ydim(), j - 1 ), k + 1 ) ) / dy,
-                     0.5f * ( value( i, j, index( grid->zdim(), k + 2 ) ) - s[0] ) / dz };
+            n[4] = { 0.5f * ( s[5] - value( index( dim, i - 1 ), j, k + 1 ) ) / dx,
+                     0.5f * ( s[6] - value( i, index( dim, j - 1 ), k + 1 ) ) / dy,
+                     0.5f * ( value( i, j, index( dim, k + 2 ) ) - s[0] ) / dz };
 
             // vertex 5
-            n[5] = { 0.5f * ( value( index( grid->xdim(), i + 2 ), j, k + 1 ) - s[4] ) / dx,
-                     0.5f * ( s[7] - value( i + 1, index( grid->ydim(), j - 1 ), k + 1 ) ) / dy,
-                     0.5f * ( value( i + 1, j, index( grid->zdim(), k + 2 ) ) - s[1] ) / dz };
+            n[5] = { 0.5f * ( value( index( dim, i + 2 ), j, k + 1 ) - s[4] ) / dx,
+                     0.5f * ( s[7] - value( i + 1, index( dim, j - 1 ), k + 1 ) ) / dy,
+                     0.5f * ( value( i + 1, j, index( dim, k + 2 ) ) - s[1] ) / dz };
 
             // vertex 6
-            n[6] = { 0.5f * ( s[7] - value( index( grid->xdim(), i - 1 ), j + 1, k + 1 ) ) / dx,
-                     0.5f * ( value( i, index( grid->ydim(), j + 2 ), k + 1 ) - s[4] ) / dy,
-                     0.5f * ( value( i, j + 1, index( grid->zdim(), k + 2 ) ) - s[2] ) / dz };
+            n[6] = { 0.5f * ( s[7] - value( index( dim, i - 1 ), j + 1, k + 1 ) ) / dx,
+                     0.5f * ( value( i, index( dim, j + 2 ), k + 1 ) - s[4] ) / dy,
+                     0.5f * ( value( i, j + 1, index( dim, k + 2 ) ) - s[2] ) / dz };
 
             // vertex 7
-            n[7] = { 0.5f * ( value( index( grid->xdim(), i + 2 ), j + 1, k + 1 ) - s[6] ) / dx,
-                     0.5f * ( value( i + 1, index( grid->ydim(), j + 2 ), k + 1 ) - s[5] ) / dy,
-                     0.5f * ( value( i + 1, j + 1, index( grid->zdim(), k + 2 ) ) - s[3] ) / dz };
+            n[7] = { 0.5f * ( value( index( dim, i + 2 ), j + 1, k + 1 ) - s[6] ) / dx,
+                     0.5f * ( value( i + 1, index( dim, j + 2 ), k + 1 ) - s[5] ) / dy,
+                     0.5f * ( value( i + 1, j + 1, index( dim, k + 2 ) ) - s[3] ) / dz };
         }
 
         Point_3 position( const std::size_t x, const std::size_t y, const std::size_t z ) const {
-            const FT vx = grid->voxel_x();
-            const FT vy = grid->voxel_y();
-            const FT vz = grid->voxel_z();
+            const FT vx = octree_->hx();
+            const FT vy = octree_->hx();
+            const FT vz = octree_->hx();
 
-            return Point_3( x * vx + grid->offset_x(), y * vy + grid->offset_y(), z * vz + grid->offset_z() );
+            return Point_3( x * vx + octree_->offset_x(), y * vy + octree_->offset_y(), z * vz + octree_->offset_z() );
         }
 
-        FT value( const std::size_t x, const std::size_t y, const std::size_t z ) const { return grid->value( x, y, z ); }
+        FT value( const std::size_t x, const std::size_t y, const std::size_t z ) const { return octree_->value( x, y, z ); }
 
       private:
-        const Cartesian_grid_3<Geom_traits>* grid;
+        const OctreeWrapper* octree_;
     };
 
 }    // namespace CGAL
 
-#endif    // CGAL_CARTESIAN_GRID_ORACLE_H
+#endif    // CGAL_OCTREE_GRID_ORACLE_H
