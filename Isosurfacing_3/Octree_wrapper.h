@@ -69,7 +69,7 @@ class OctreeWrapper {
 
     Octree octree_;
 
-    // TODO add node values
+    std::set<Octree::Node::Global_coordinates> leaf_node_coordinates;
     std::map<Octree_vertex_id, FT> node_values_;
 
   public:
@@ -88,6 +88,8 @@ class OctreeWrapper {
 
         // init node values
         for( Octree::Node node: octree_.traverse<CGAL::Orthtrees::Leaves_traversal>() ) {
+            leaf_node_coordinates.insert( global_leaf_coordinates( node ) );
+
             node_values_[global_vertex_coordinates( node, 0b000 )] = 0;
             node_values_[global_vertex_coordinates( node, 0b001 )] = 0;
             node_values_[global_vertex_coordinates( node, 0b010 )] = 0;
@@ -117,7 +119,7 @@ class OctreeWrapper {
         return coords;
     }
 
-    std::array<Point_3, 8> node_points( const Octree::Node& node ) {
+    std::array<Point_3, 8> node_points( const Octree::Node& node ) const {
         auto coords          = node.global_coordinates();
         const std::size_t df = depth_factor( node );
 
@@ -164,6 +166,45 @@ class OctreeWrapper {
         return v_coords;
     }
 
+    Octree::Node get_node( const std::size_t i, const std::size_t j, const std::size_t k ) const {
+        Octree::Node node = octree_.root();
+        std::size_t x     = i;
+        std::size_t y     = j;
+        std::size_t z     = k;
+        while( !node.is_leaf() ) {
+            std::size_t dist_to_max = max_depth_ - node.depth() - 1;
+            Octree::Node::Local_coordinates loc;
+            if( x & ( std::size_t( 1 ) << dist_to_max ) ) {
+                loc[0] = true;
+            }
+            if( y & ( std::size_t( 1 ) << dist_to_max ) ) {
+                loc[1] = true;
+            }
+            if( z & ( std::size_t( 1 ) << dist_to_max ) ) {
+                loc[2] = true;
+            }
+            node = node[loc.to_ulong()];
+        }
+        return node;
+    }
+
+    /// <summary>
+    /// Check if the cell (i,j,k) exists
+    /// </summary>
+    /// <param name="i">i-index of cell</param>
+    /// <param name="j">j-index of cell</param>
+    /// <param name="k">k-index of cell</param>
+    /// <returns></returns>
+    bool exists( const std::size_t& i, const std::size_t& j, const std::size_t& k ) const {
+        Octree::Node::Global_coordinates coords = { (Octree_vertex_id::value_type)i, (Octree_vertex_id::value_type)j,
+                                                    (Octree_vertex_id::value_type)k };
+        if( leaf_node_coordinates.find( coords ) != leaf_node_coordinates.end() ) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     std::size_t lex_index( const std::size_t& i, const std::size_t& j, const std::size_t& k ) const { return k * dim_ * dim_ + j * dim_ + i; }
 
     /// <summary>
@@ -191,6 +232,37 @@ class OctreeWrapper {
     FT& value( const std::size_t i, const std::size_t j, const std::size_t k ) {
         Octree_vertex_id v_id = { (Octree_vertex_id::value_type)i, (Octree_vertex_id::value_type)j, (Octree_vertex_id::value_type)k };
         return node_values_[v_id];
+    }
+
+    std::array<FT, 8> voxel_values( const std::size_t i, const std::size_t j, const std::size_t k ) const {
+        Octree::Node node = get_node(i,j,k);
+
+        std::array<Octree_vertex_id, 8> v;
+        v[0] = global_vertex_coordinates( node, 0b000 );
+        v[1] = global_vertex_coordinates( node, 0b001 );
+        v[2] = global_vertex_coordinates( node, 0b010 );
+        v[3] = global_vertex_coordinates( node, 0b011 );
+        v[4] = global_vertex_coordinates( node, 0b100 );
+        v[5] = global_vertex_coordinates( node, 0b101 );
+        v[6] = global_vertex_coordinates( node, 0b110 );
+        v[7] = global_vertex_coordinates( node, 0b111 );
+
+        std::array<FT, 8> s;
+        s[0] = node_values_.at( v[0] );
+        s[1] = node_values_.at( v[1] );
+        s[2] = node_values_.at( v[2] );
+        s[3] = node_values_.at( v[3] );
+        s[4] = node_values_.at( v[4] );
+        s[5] = node_values_.at( v[5] );
+        s[6] = node_values_.at( v[6] );
+        s[7] = node_values_.at( v[7] );
+
+        return s;
+    }
+
+    std::array<Point_3, 8> voxel_vertex_positions( const std::size_t i, const std::size_t j, const std::size_t k ) const {
+        Octree::Node node = get_node( i, j, k );
+        return node_points( node );
     }
 
     void print( const std::string& filename ) const {

@@ -2,6 +2,7 @@
 
 #include <CGAL/Simple_cartesian.h>
 #include <CGAL/Surface_mesh.h>
+#include "Cartesian_grid_3.h"
 
 typedef CGAL::Simple_cartesian<float> Kernel;
 typedef typename Kernel::FT FT;

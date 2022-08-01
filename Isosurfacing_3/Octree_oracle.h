@@ -2,7 +2,6 @@
 #define CGAL_OCTREE_GRID_ORACLE_H
 
 #include "Octree_wrapper.h"
-
 #include "types.h"
 
 #include <array>
@@ -56,38 +55,31 @@ namespace CGAL {
             const std::size_t dim = octree_->dim() + 1;
 
             // vertex 0
-            n[0] = { 0.5f * ( s[1] - value( index( dim, i - 1 ), j, k ) ) / dx,
-                     0.5f * ( s[2] - value( i, index( dim, j - 1 ), k ) ) / dy,
+            n[0] = { 0.5f * ( s[1] - value( index( dim, i - 1 ), j, k ) ) / dx, 0.5f * ( s[2] - value( i, index( dim, j - 1 ), k ) ) / dy,
                      0.5f * ( s[4] - value( i, j, index( dim, k - 1 ) ) ) / dz };
 
             // vertex 1
-            n[1] = { 0.5f * ( value( index( dim, i + 2 ), j, k ) - s[0] ) / dx,
-                     0.5f * ( s[3] - value( i + 1, index( dim, j - 1 ), k ) ) / dy,
+            n[1] = { 0.5f * ( value( index( dim, i + 2 ), j, k ) - s[0] ) / dx, 0.5f * ( s[3] - value( i + 1, index( dim, j - 1 ), k ) ) / dy,
                      0.5f * ( s[5] - value( i + 1, j, index( dim, k - 1 ) ) ) / dz };
 
             // vertex 2
-            n[2] = { 0.5f * ( s[3] - value( index( dim, i - 1 ), j + 1, k ) ) / dx,
-                     0.5f * ( value( i, index( dim, j + 2 ), k ) - s[0] ) / dy,
+            n[2] = { 0.5f * ( s[3] - value( index( dim, i - 1 ), j + 1, k ) ) / dx, 0.5f * ( value( i, index( dim, j + 2 ), k ) - s[0] ) / dy,
                      0.5f * ( s[6] - value( i, j + 1, index( dim, k - 1 ) ) ) / dz };
 
             // vertex 3
-            n[3] = { 0.5f * ( value( index( dim, i + 2 ), j + 1, k ) - s[2] ) / dx,
-                     0.5f * ( value( i + 1, index( dim, j + 2 ), k ) - s[1] ) / dy,
+            n[3] = { 0.5f * ( value( index( dim, i + 2 ), j + 1, k ) - s[2] ) / dx, 0.5f * ( value( i + 1, index( dim, j + 2 ), k ) - s[1] ) / dy,
                      0.5f * ( s[7] - value( i + 1, j + 1, index( dim, k - 1 ) ) ) / dz };
 
             // vertex 4
-            n[4] = { 0.5f * ( s[5] - value( index( dim, i - 1 ), j, k + 1 ) ) / dx,
-                     0.5f * ( s[6] - value( i, index( dim, j - 1 ), k + 1 ) ) / dy,
+            n[4] = { 0.5f * ( s[5] - value( index( dim, i - 1 ), j, k + 1 ) ) / dx, 0.5f * ( s[6] - value( i, index( dim, j - 1 ), k + 1 ) ) / dy,
                      0.5f * ( value( i, j, index( dim, k + 2 ) ) - s[0] ) / dz };
 
             // vertex 5
-            n[5] = { 0.5f * ( value( index( dim, i + 2 ), j, k + 1 ) - s[4] ) / dx,
-                     0.5f * ( s[7] - value( i + 1, index( dim, j - 1 ), k + 1 ) ) / dy,
+            n[5] = { 0.5f * ( value( index( dim, i + 2 ), j, k + 1 ) - s[4] ) / dx, 0.5f * ( s[7] - value( i + 1, index( dim, j - 1 ), k + 1 ) ) / dy,
                      0.5f * ( value( i + 1, j, index( dim, k + 2 ) ) - s[1] ) / dz };
 
             // vertex 6
-            n[6] = { 0.5f * ( s[7] - value( index( dim, i - 1 ), j + 1, k + 1 ) ) / dx,
-                     0.5f * ( value( i, index( dim, j + 2 ), k + 1 ) - s[4] ) / dy,
+            n[6] = { 0.5f * ( s[7] - value( index( dim, i - 1 ), j + 1, k + 1 ) ) / dx, 0.5f * ( value( i, index( dim, j + 2 ), k + 1 ) - s[4] ) / dy,
                      0.5f * ( value( i, j + 1, index( dim, k + 2 ) ) - s[2] ) / dz };
 
             // vertex 7
@@ -105,6 +97,14 @@ namespace CGAL {
         }
 
         FT value( const std::size_t x, const std::size_t y, const std::size_t z ) const { return octree_->value( x, y, z ); }
+
+        std::array<FT, 8> voxel_values( const std::size_t i, const std::size_t j, const std::size_t k ) const { return octree_->voxel_values( i, j, k ); }
+
+        std::array<Point_3, 8> voxel_vertex_positions( const std::size_t i, const std::size_t j, const std::size_t k ) const {
+            return octree_->voxel_vertex_positions( i, j, k );
+        }
+
+        bool exists( const std::size_t& i, const std::size_t& j, const std::size_t& k ) const { return octree_->exists( i, j, k ); }
 
       private:
         const OctreeWrapper* octree_;

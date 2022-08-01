@@ -1,6 +1,4 @@
-#include "Cartesian_grid_3.h"
-#include "Cartesian_grid_oracle.h"
-#include "Dual_contouring_3.h"
+#include "Dual_contouring_octree_3.h"
 #include "Octree_oracle.h"
 #include "Octree_wrapper.h"
 #include "types.h"
@@ -25,24 +23,21 @@ Kernel::FT sphere_function( const Point_3& point ) { return std::sqrt( point.x()
 int main() {
     const int n_voxels = 11;
 
-    Grid grid( n_voxels, n_voxels, n_voxels, { -1, -1, -1, 1, 1, 1 } );
-
     OctreeWrapper octree_wrap( 2, { -1, -1, -1, 1, 1, 1 } );
     octree_wrap.print( "../octree.off" );
 
-    // CGAL::Cartesian_grid_oracle<Kernel> grid_oracle( grid );
     CGAL::Octree_oracle octree_oracle( octree_wrap );
 
     std::cout << "Init grid" << std::endl;
 
-    const std::size_t size_k = grid.xdim();
-    const std::size_t size_j = grid.ydim();
-    const std::size_t size_i = grid.zdim();
+    const std::size_t size_k = octree_oracle.size_x();
+    const std::size_t size_j = octree_oracle.size_y();
+    const std::size_t size_i = octree_oracle.size_z();
 
     //#pragma omp parallel for
-    for( int z = 0; z < octree_wrap.dim() + 1; z++ ) {
-        for( int y = 0; y < octree_wrap.dim() + 1; y++ ) {
-            for( int x = 0; x < octree_wrap.dim() + 1; x++ ) {
+    for( int z = 0; z < size_k; z++ ) {
+        for( int y = 0; y < size_j; y++ ) {
+            for( int x = 0; x < size_i; x++ ) {
                 const auto& p                  = octree_oracle.position( x, y, z );
                 octree_wrap.value( x, y, z ) = sphere_function( p );
             }
