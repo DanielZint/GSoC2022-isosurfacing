@@ -5,7 +5,7 @@
 #include "Marching_cubes_3.h"
 #include "types.h"
 
-#include <CGAL/AABB_face_graph_triangle_primitive.h>
+#include <CGAL/AABB_triangle_primitive.h>
 #include <CGAL/AABB_traits.h>
 #include <CGAL/AABB_tree.h>
 #include <CGAL/Polygon_mesh_processing/bbox.h>
@@ -18,9 +18,11 @@
 
 namespace PMP = CGAL::Polygon_mesh_processing;
 
-typedef CGAL::AABB_face_graph_triangle_primitive<Mesh> Primitive;
-typedef CGAL::AABB_traits<Kernel, Primitive> Traits;
-typedef CGAL::AABB_tree<Traits> Tree;
+typedef Kernel::Triangle_3 Triangle;
+typedef std::vector<Triangle>::iterator Iterator;
+typedef CGAL::AABB_triangle_primitive<Kernel, Iterator> Primitive;
+typedef CGAL::AABB_traits<Kernel, Primitive> AABB_triangle_traits;
+typedef CGAL::AABB_tree<AABB_triangle_traits> Tree;
 
 inline Kernel::FT distance_to_mesh( const Tree& tree, const Point_3& p ) {
     const Point_3& x = tree.closest_point( p );
@@ -39,33 +41,50 @@ int main( int argc, char** argv ) {
     int inside_outside = 0;
     bool use_bbox      = false;
     app.add_flag( "--mc,!--dc", use_mc, "Use Marching Cubes (--mc) or Dual Contouring (--dc) for offset computation" )->required();
-    app.add_option( "--offset", offset_value, "Value by which the input mesh is offsetted" )->required()->check( CLI::NonNegativeNumber );
-    app.add_option( "--np", n_voxel_points, "Number of sampling points in every dimension" )->required()->check( CLI::PositiveNumber );
+    app.add_option( "--offset,-v", offset_value, "Value by which the input mesh is offsetted" )->required()->check( CLI::NonNegativeNumber );
+    app.add_option( "--np,-n", n_voxel_points, "Number of sampling points in every dimension" )->required()->check( CLI::PositiveNumber );
     app.add_option( "--input,-i", input_name, "Input mesh in off file format" )->required()->check( CLI::ExistingFile );
     app.add_option( "--output,-o", output_name, "Output mesh in off file format" )->default_val( "offset.off" );
-    app.add_flag( "--inside{1},--outside{2},--doublesided{0},--is{1},--os{2},--ds{0}", inside_outside,
-                  "Compute the offset on the inside, outside or both sides of the mesh" )
-        ->default_val( 0 );
+    // app.add_flag( "--inside{1},--outside{2},--doublesided{0},--is{1},--os{2},--ds{0}", inside_outside,
+    //              "Compute the offset on the inside, outside or both sides of the mesh" )
+    //    ->default_val( 0 );
     app.add_flag( "--bbox", use_bbox, "Make sure that vertices stay inside their voxel when using Dual Contouring" )->default_val( false );
 
     CLI11_PARSE( app, argc, argv );
 
-    Mesh mesh_input;
-    if( !CGAL::IO::read_OFF( input_name, mesh_input ) ) {
+    // Mesh mesh_input;
+    Point_range points_in;
+    Polygon_range polygons_in;
+    if( !CGAL::IO::read_OFF( input_name, points_in, polygons_in ) ) {
         std::cout << "Could not read mesh" << std::endl;
         exit( -1 );
     }
 
+    std::vector<Triangle> triangles;
+    triangles.reserve( polygons_in.size() );
+    for( const auto& polygon: polygons_in ) {
+        if( polygon.size() < 3 ) {
+            continue;
+        }
+        for( int i = 1; i < polygon.size() - 1; ++i ) {
+            triangles.push_back( Triangle( points_in[polygon[0]], points_in[polygon[i]], points_in[polygon[i + 1]] ) );
+        }
+    }
+
     // compute bounding box
-    CGAL::Bbox_3 aabb_grid     = PMP::bbox( mesh_input );
+    CGAL::Bbox_3 aabb_grid;
+    for( const auto& t: triangles ) {
+        aabb_grid += t.bbox();
+    }
     Vector_3 aabb_increase_vec = Vector_3( offset_value * 1.1, offset_value * 1.1, offset_value * 1.1 );
     aabb_grid += ( Point_3( aabb_grid.xmax(), aabb_grid.ymax(), aabb_grid.zmax() ) + aabb_increase_vec ).bbox();
     aabb_grid += ( Point_3( aabb_grid.xmin(), aabb_grid.ymin(), aabb_grid.zmin() ) - aabb_increase_vec ).bbox();
 
     // construct AABB tree
-    Tree tree( mesh_input.faces_begin(), mesh_input.faces_end(), mesh_input );
+    // Tree tree( mesh_input.faces_begin(), mesh_input.faces_end(), mesh_input );
+    Tree tree( triangles.begin(), triangles.end() );
 
-    CGAL::Side_of_triangle_mesh<Mesh, CGAL::GetGeomTraits<Mesh>::type> sotm( mesh_input );
+    // CGAL::Side_of_triangle_mesh<Mesh, CGAL::GetGeomTraits<Mesh>::type> sotm( mesh_input );
 
     Grid grid( n_voxel_points, n_voxel_points, n_voxel_points, aabb_grid );
 
@@ -87,35 +106,34 @@ int main( int argc, char** argv ) {
         }
     }
 
-    // add sign if output is not double sided
-    if( inside_outside != 0 ) {
-#pragma omp parallel for
-        for( int z = 0; z < grid.zdim(); z++ ) {
-            for( int y = 0; y < grid.ydim(); y++ ) {
-                for( int x = 0; x < grid.xdim(); x++ ) {
-                    const auto& p        = grid_oracle.position( x, y, z );
-                    const bool is_inside = ( sotm( p ) == CGAL::ON_BOUNDED_SIDE );
-                    if( is_inside && inside_outside == 2 ) {
-                        grid.value( x, y, z ) *= -1;
-                    } else if( !is_inside && inside_outside == 1 ) {
-                        grid.value( x, y, z ) *= -1;
-                    }
-                }
-            }
-        }
-    }
+    //    // add sign if output is not double sided
+    //    if( inside_outside != 0 ) {
+    //#pragma omp parallel for
+    //        for( int z = 0; z < grid.zdim(); z++ ) {
+    //            for( int y = 0; y < grid.ydim(); y++ ) {
+    //                for( int x = 0; x < grid.xdim(); x++ ) {
+    //                    const auto& p        = grid_oracle.position( x, y, z );
+    //                    const bool is_inside = ( sotm( p ) == CGAL::ON_BOUNDED_SIDE );
+    //                    if( is_inside && inside_outside == 2 ) {
+    //                        grid.value( x, y, z ) *= -1;
+    //                    } else if( !is_inside && inside_outside == 1 ) {
+    //                        grid.value( x, y, z ) *= -1;
+    //                    }
+    //                }
+    //            }
+    //        }
+    //    }
 
-    Point_range points;
-    Polygon_range polygons;
+    Point_range points_out;
+    Polygon_range polygons_out;
 
     if( use_mc ) {
         std::cout << "Run Marching Cubes" << std::endl;
-        CGAL::make_triangle_mesh_using_marching_cubes( grid_oracle, offset_value, points, polygons );
+        CGAL::make_triangle_mesh_using_marching_cubes( grid_oracle, offset_value, points_out, polygons_out );
     } else {
         std::cout << "Run Dual Contouring" << std::endl;
-        CGAL::make_quad_mesh_using_dual_contouring( grid_oracle, offset_value, points, polygons, use_bbox );
+        CGAL::make_quad_mesh_using_dual_contouring( grid_oracle, offset_value, points_out, polygons_out, use_bbox );
     }
 
-    CGAL::IO::write_OFF( output_name, points, polygons );
-
+    CGAL::IO::write_OFF( output_name, points_out, polygons_out );
 }
