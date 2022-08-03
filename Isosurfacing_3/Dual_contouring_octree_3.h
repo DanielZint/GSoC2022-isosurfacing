@@ -216,7 +216,7 @@ namespace CGAL {
         std::map<size_t, size_t> map_voxel_to_point_id;
         std::map<size_t, Point_3> map_voxel_to_point;
         size_t points_counter = 0;
-        std::map<size_t, std::array<size_t, 4>> quads;
+        std::map<Octree_edge_index, std::array<size_t, 4>> quads;
 
         const std::size_t size_k = domain.size_x();
         const std::size_t size_j = domain.size_y();
@@ -224,9 +224,9 @@ namespace CGAL {
 
         // save all points
         if( use_bbox ) {
-            for( int k = 0; k < size_k - 1; k++ ) {
-                for( int j = 0; j < size_j - 1; j++ ) {
-                    for( int i = 0; i < size_i - 1; i++ ) {
+            for( int k = 0; k < size_k; k++ ) {
+                for( int j = 0; j < size_j; j++ ) {
+                    for( int i = 0; i < size_i; i++ ) {
                         if( !domain.exists( i, j, k ) ) {
                             continue;
                         }
@@ -240,9 +240,9 @@ namespace CGAL {
                 }
             }
         } else {
-            for( int k = 0; k < size_k - 1; k++ ) {
-                for( int j = 0; j < size_j - 1; j++ ) {
-                    for( int i = 0; i < size_i - 1; i++ ) {
+            for( int k = 0; k < size_k; k++ ) {
+                for( int j = 0; j < size_j; j++ ) {
+                    for( int i = 0; i < size_i; i++ ) {
                         if( !domain.exists( i, j, k ) ) {
                             continue;
                         }
@@ -257,82 +257,101 @@ namespace CGAL {
             }
         }
 
+        // iterate through edges
+        const std::size_t n_edges = domain.n_edges();
+        const auto& edges         = domain.edges();
+
+        for( const auto& e: edges ) {
+            const auto& [s0, s1] = domain.edge_values( e );
+
+            if( s0 <= iso_value && s1 > iso_value ) {
+                const auto voxels    = domain.voxels_incident_to_edge( e );
+                quads[e] = voxels;
+            }
+            else if( s1 <= iso_value && s0 > iso_value ) {
+                const auto voxels       = domain.voxels_incident_to_edge( e );
+                quads[e] = { voxels[0], voxels[3], voxels[2], voxels[1] };
+            }
+        }
+
         // save all quads
-        for( int k = 0; k < size_k - 1; k++ ) {
-            for( int j = 0; j < size_j - 1; j++ ) {
-                for( int i = 0; i < size_i - 1; i++ ) {
-                    if( !domain.exists( i, j, k ) ) {
-                        continue;
-                    }
-                    const auto s    = domain.voxel_values( i, j, k );
-
-                    unsigned int cubeindex = 0;
-                    // set bit if corresponding corner is below iso
-                    cubeindex |= ( s[0] <= iso_value ) << 0;
-                    cubeindex |= ( s[1] <= iso_value ) << 1;
-                    cubeindex |= ( s[2] <= iso_value ) << 2;
-                    cubeindex |= ( s[3] <= iso_value ) << 3;
-                    cubeindex |= ( s[4] <= iso_value ) << 4;
-                    cubeindex |= ( s[5] <= iso_value ) << 5;
-                    cubeindex |= ( s[6] <= iso_value ) << 6;
-                    cubeindex |= ( s[7] <= iso_value ) << 7;
-
-                    if( cubeindex == 0 || cubeindex == 255 ) {
-                        continue;
-                    }
-
-                    // e0 x
-                    if( j > 0 && k > 0 ) {
-                        if( s[0] > iso_value && s[1] <= iso_value ) {
-                            const size_t a     = domain.lex_index( i, j, k );
-                            const size_t b     = domain.lex_index( i, j, k - 1 );
-                            const size_t c     = domain.lex_index( i, j - 1, k - 1 );
-                            const size_t d     = domain.lex_index( i, j - 1, k );
-                            const size_t e_idx = domain.e_glIndex( 0, i, j, k );
-                            quads[e_idx]       = { a, b, c, d };
-                        } else if( s[0] <= iso_value && s[1] > iso_value ) {
-                            const size_t a     = domain.lex_index( i, j, k );
-                            const size_t b     = domain.lex_index( i, j - 1, k );
-                            const size_t c     = domain.lex_index( i, j - 1, k - 1 );
-                            const size_t d     = domain.lex_index( i, j, k - 1 );
-                            const size_t e_idx = domain.e_glIndex( 0, i, j, k );
-                            quads[e_idx]       = { a, b, c, d };
+        if( false ) {
+            for( int k = 0; k < size_k; k++ ) {
+                for( int j = 0; j < size_j; j++ ) {
+                    for( int i = 0; i < size_i; i++ ) {
+                        if( !domain.exists( i, j, k ) ) {
+                            continue;
                         }
-                    }
-                    // e3 y
-                    if( i > 0 && k > 0 ) {
-                        if( s[0] > iso_value && s[2] <= iso_value ) {
-                            const size_t a     = domain.lex_index( i, j, k );
-                            const size_t b     = domain.lex_index( i - 1, j, k );
-                            const size_t c     = domain.lex_index( i - 1, j, k - 1 );
-                            const size_t d     = domain.lex_index( i, j, k - 1 );
-                            const size_t e_idx = domain.e_glIndex( 3, i, j, k );
-                            quads[e_idx]       = { a, b, c, d };
-                        } else if( s[0] <= iso_value && s[2] > iso_value ) {
-                            const size_t a     = domain.lex_index( i, j, k );
-                            const size_t b     = domain.lex_index( i, j, k - 1 );
-                            const size_t c     = domain.lex_index( i - 1, j, k - 1 );
-                            const size_t d     = domain.lex_index( i - 1, j, k );
-                            const size_t e_idx = domain.e_glIndex( 3, i, j, k );
-                            quads[e_idx]       = { a, b, c, d };
+                        const auto s = domain.voxel_values( i, j, k );
+
+                        unsigned int cubeindex = 0;
+                        // set bit if corresponding corner is below iso
+                        cubeindex |= ( s[0] <= iso_value ) << 0;
+                        cubeindex |= ( s[1] <= iso_value ) << 1;
+                        cubeindex |= ( s[2] <= iso_value ) << 2;
+                        cubeindex |= ( s[3] <= iso_value ) << 3;
+                        cubeindex |= ( s[4] <= iso_value ) << 4;
+                        cubeindex |= ( s[5] <= iso_value ) << 5;
+                        cubeindex |= ( s[6] <= iso_value ) << 6;
+                        cubeindex |= ( s[7] <= iso_value ) << 7;
+
+                        if( cubeindex == 0 || cubeindex == 255 ) {
+                            continue;
                         }
-                    }
-                    // e8 z
-                    if( i > 0 && j > 0 ) {
-                        if( s[0] > iso_value && s[4] <= iso_value ) {
-                            const size_t a     = domain.lex_index( i, j, k );
-                            const size_t b     = domain.lex_index( i, j - 1, k );
-                            const size_t c     = domain.lex_index( i - 1, j - 1, k );
-                            const size_t d     = domain.lex_index( i - 1, j, k );
-                            const size_t e_idx = domain.e_glIndex( 8, i, j, k );
-                            quads[e_idx]       = { a, b, c, d };
-                        } else if( s[0] <= iso_value && s[4] > iso_value ) {
-                            const size_t a     = domain.lex_index( i, j, k );
-                            const size_t b     = domain.lex_index( i - 1, j, k );
-                            const size_t c     = domain.lex_index( i - 1, j - 1, k );
-                            const size_t d     = domain.lex_index( i, j - 1, k );
-                            const size_t e_idx = domain.e_glIndex( 8, i, j, k );
-                            quads[e_idx]       = { a, b, c, d };
+
+                        // e0 x
+                        if( j > 0 && k > 0 ) {
+                            if( s[0] > iso_value && s[1] <= iso_value ) {
+                                const size_t a     = domain.lex_index( i, j, k );
+                                const size_t b     = domain.lex_index( i, j, k - 1 );
+                                const size_t c     = domain.lex_index( i, j - 1, k - 1 );
+                                const size_t d     = domain.lex_index( i, j - 1, k );
+                                const size_t e_idx = domain.e_glIndex( 0, i, j, k );
+                                quads[{ e_idx, 0 }] = { a, b, c, d };
+                            } else if( s[0] <= iso_value && s[1] > iso_value ) {
+                                const size_t a     = domain.lex_index( i, j, k );
+                                const size_t b     = domain.lex_index( i, j - 1, k );
+                                const size_t c     = domain.lex_index( i, j - 1, k - 1 );
+                                const size_t d     = domain.lex_index( i, j, k - 1 );
+                                const size_t e_idx = domain.e_glIndex( 0, i, j, k );
+                                quads[{ e_idx, 0 }]   = { a, b, c, d };
+                            }
+                        }
+                        // e3 y
+                        if( i > 0 && k > 0 ) {
+                            if( s[0] > iso_value && s[2] <= iso_value ) {
+                                const size_t a     = domain.lex_index( i, j, k );
+                                const size_t b     = domain.lex_index( i - 1, j, k );
+                                const size_t c     = domain.lex_index( i - 1, j, k - 1 );
+                                const size_t d     = domain.lex_index( i, j, k - 1 );
+                                const size_t e_idx = domain.e_glIndex( 3, i, j, k );
+                                quads[{ e_idx, 0 }] = { a, b, c, d };
+                            } else if( s[0] <= iso_value && s[2] > iso_value ) {
+                                const size_t a     = domain.lex_index( i, j, k );
+                                const size_t b     = domain.lex_index( i, j, k - 1 );
+                                const size_t c     = domain.lex_index( i - 1, j, k - 1 );
+                                const size_t d     = domain.lex_index( i - 1, j, k );
+                                const size_t e_idx = domain.e_glIndex( 3, i, j, k );
+                                quads[{ e_idx, 0 }] = { a, b, c, d };
+                            }
+                        }
+                        // e8 z
+                        if( i > 0 && j > 0 ) {
+                            if( s[0] > iso_value && s[4] <= iso_value ) {
+                                const size_t a     = domain.lex_index( i, j, k );
+                                const size_t b     = domain.lex_index( i, j - 1, k );
+                                const size_t c     = domain.lex_index( i - 1, j - 1, k );
+                                const size_t d     = domain.lex_index( i - 1, j, k );
+                                const size_t e_idx = domain.e_glIndex( 8, i, j, k );
+                                quads[{ e_idx, 0 }] = { a, b, c, d };
+                            } else if( s[0] <= iso_value && s[4] > iso_value ) {
+                                const size_t a     = domain.lex_index( i, j, k );
+                                const size_t b     = domain.lex_index( i - 1, j, k );
+                                const size_t c     = domain.lex_index( i - 1, j - 1, k );
+                                const size_t d     = domain.lex_index( i, j - 1, k );
+                                const size_t e_idx = domain.e_glIndex( 8, i, j, k );
+                                quads[{ e_idx, 0 }] = { a, b, c, d };
+                            }
                         }
                     }
                 }

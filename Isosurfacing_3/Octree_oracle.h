@@ -16,11 +16,11 @@ namespace CGAL {
         typedef typename Geom_traits::Vector_3 Vector_3;
 
       public:
-        Octree_oracle( const OctreeWrapper& octree ) : octree_( &octree ) {}
+        Octree_oracle( const OctreeWrapper& octree ) : octree_( &octree ), octree_edges_( octree.leaf_edges().begin(), octree.leaf_edges().end() ) {}
 
-        std::size_t size_x() const { return octree_->dim() + 1; }
-        std::size_t size_y() const { return octree_->dim() + 1; }
-        std::size_t size_z() const { return octree_->dim() + 1; }
+        std::size_t size_x() const { return octree_->dim(); }
+        std::size_t size_y() const { return octree_->dim(); }
+        std::size_t size_z() const { return octree_->dim(); }
 
         std::size_t lex_index( const std::size_t& i, const std::size_t& j, const std::size_t& k ) const {
             return k * size_z() * size_y() + j * size_x() + i;
@@ -98,7 +98,9 @@ namespace CGAL {
 
         FT value( const std::size_t x, const std::size_t y, const std::size_t z ) const { return octree_->value( x, y, z ); }
 
-        std::array<FT, 8> voxel_values( const std::size_t i, const std::size_t j, const std::size_t k ) const { return octree_->voxel_values( i, j, k ); }
+        std::array<FT, 8> voxel_values( const std::size_t i, const std::size_t j, const std::size_t k ) const {
+            return octree_->voxel_values( i, j, k );
+        }
 
         std::array<Point_3, 8> voxel_vertex_positions( const std::size_t i, const std::size_t j, const std::size_t k ) const {
             return octree_->voxel_vertex_positions( i, j, k );
@@ -106,8 +108,16 @@ namespace CGAL {
 
         bool exists( const std::size_t& i, const std::size_t& j, const std::size_t& k ) const { return octree_->exists( i, j, k ); }
 
+        std::size_t n_edges() const { return octree_->leaf_edges().size(); }
+
+        std::array<FT, 2> edge_values( const Octree_edge_index& e_id ) const { return octree_->edge_values( e_id ); }
+        std::array<std::size_t, 4> voxels_incident_to_edge( const Octree_edge_index& e_id ) const { return octree_->voxels_incident_to_edge( e_id ); }
+
+        const std::vector<Octree_edge_index>& edges() const { return octree_edges_; }
+
       private:
         const OctreeWrapper* octree_;
+        std::vector<Octree_edge_index> octree_edges_;
     };
 
 }    // namespace CGAL

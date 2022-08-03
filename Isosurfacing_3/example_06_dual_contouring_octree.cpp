@@ -21,9 +21,7 @@ typedef CGAL::AABB_tree<Traits> Tree;
 Kernel::FT sphere_function( const Point_3& point ) { return std::sqrt( point.x() * point.x() + point.y() * point.y() + point.z() * point.z() ); };
 
 int main() {
-    const int n_voxels = 11;
-
-    OctreeWrapper octree_wrap( 2, { -1, -1, -1, 1, 1, 1 } );
+    OctreeWrapper octree_wrap( 5, { -1, -1, -1, 1, 1, 1 } );
     octree_wrap.print( "../octree.off" );
 
     CGAL::Octree_oracle octree_oracle( octree_wrap );
@@ -35,9 +33,9 @@ int main() {
     const std::size_t size_i = octree_oracle.size_z();
 
     //#pragma omp parallel for
-    for( int z = 0; z < size_k; z++ ) {
-        for( int y = 0; y < size_j; y++ ) {
-            for( int x = 0; x < size_i; x++ ) {
+    for( int z = 0; z < size_k + 1; z++ ) {
+        for( int y = 0; y < size_j + 1; y++ ) {
+            for( int x = 0; x < size_i + 1; x++ ) {
                 const auto& p                  = octree_oracle.position( x, y, z );
                 octree_wrap.value( x, y, z ) = sphere_function( p );
             }
