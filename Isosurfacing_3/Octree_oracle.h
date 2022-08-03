@@ -46,46 +46,65 @@ namespace CGAL {
         /// compute the gradient of the scalar field with central difference
         void gradient( std::array<Vector_3, 8>& n, const std::array<float, 8>& s, const std::size_t& i, const std::size_t& j,
                        const std::size_t& k ) const {
-            auto index = []( const int dim, const int ii ) { return ( ii < 0 ? 0 : ii >= dim ? ( dim - 1 ) : ii ); };
 
-            const FT& dx = octree_->hx();
-            const FT& dy = octree_->hx();
-            const FT& dz = octree_->hx();
-
+            const auto node = octree_->get_node( i, j, k );
+            const auto df   = octree_->depth_factor( node );
             const std::size_t dim = octree_->dim() + 1;
+            auto index = [&df, &dim]( const int ii ) { return ( ii < 0 ? 0 : ii >= dim ? ( dim - 1 ) : ii ); };
+
+            
+            const FT& dx = octree_->hx() * df;
+            const FT& dy = octree_->hx() * df;
+            const FT& dz = octree_->hx() * df;
+
 
             // vertex 0
-            n[0] = { 0.5f * ( s[1] - value( index( dim, i - 1 ), j, k ) ) / dx, 0.5f * ( s[2] - value( i, index( dim, j - 1 ), k ) ) / dy,
-                     0.5f * ( s[4] - value( i, j, index( dim, k - 1 ) ) ) / dz };
+            n[0] = {    
+                0.5f * ( s[1] - value( index( i - df ), j, k ) ) / dx, 
+                0.5f * ( s[2] - value( i, index( j - df ), k ) ) / dy,
+                0.5f * ( s[4] - value( i, j, index( k - df ) ) ) / dz 
+            };
 
             // vertex 1
-            n[1] = { 0.5f * ( value( index( dim, i + 2 ), j, k ) - s[0] ) / dx, 0.5f * ( s[3] - value( i + 1, index( dim, j - 1 ), k ) ) / dy,
-                     0.5f * ( s[5] - value( i + 1, j, index( dim, k - 1 ) ) ) / dz };
+            n[1] = { 
+                0.5f * ( value( index( i + 2 * df ), j, k ) - s[0] ) / dx, 
+                0.5f * ( s[3] - value( i + df, index( j - df ), k ) ) / dy,
+                0.5f * ( s[5] - value( i + df, j, index( k - df ) ) ) / dz };
 
             // vertex 2
-            n[2] = { 0.5f * ( s[3] - value( index( dim, i - 1 ), j + 1, k ) ) / dx, 0.5f * ( value( i, index( dim, j + 2 ), k ) - s[0] ) / dy,
-                     0.5f * ( s[6] - value( i, j + 1, index( dim, k - 1 ) ) ) / dz };
+            n[2] = { 
+                0.5f * ( s[3] - value( index( i - df ), j + df, k ) ) / dx, 
+                0.5f * ( value( i, index( j + 2 * df ), k ) - s[0] ) / dy,
+                0.5f * ( s[6] - value( i, j + df, index( k - df ) ) ) / dz };
 
             // vertex 3
-            n[3] = { 0.5f * ( value( index( dim, i + 2 ), j + 1, k ) - s[2] ) / dx, 0.5f * ( value( i + 1, index( dim, j + 2 ), k ) - s[1] ) / dy,
-                     0.5f * ( s[7] - value( i + 1, j + 1, index( dim, k - 1 ) ) ) / dz };
+            n[3] = { 
+                0.5f * ( value( index( i + 2 * df ), j + df, k ) - s[2] ) / dx, 
+                0.5f * ( value( i + df, index( j + 2 * df ), k ) - s[1] ) / dy,
+                0.5f * ( s[7] - value( i + df, j + df, index( k - df ) ) ) / dz };
 
             // vertex 4
-            n[4] = { 0.5f * ( s[5] - value( index( dim, i - 1 ), j, k + 1 ) ) / dx, 0.5f * ( s[6] - value( i, index( dim, j - 1 ), k + 1 ) ) / dy,
-                     0.5f * ( value( i, j, index( dim, k + 2 ) ) - s[0] ) / dz };
+            n[4] = { 
+                0.5f * ( s[5] - value( index( i - df ), j, k + df ) ) / dx, 
+                0.5f * ( s[6] - value( i, index( j - df ), k + df ) ) / dy,
+                0.5f * ( value( i, j, index( k + 2 * df ) ) - s[0] ) / dz };
 
             // vertex 5
-            n[5] = { 0.5f * ( value( index( dim, i + 2 ), j, k + 1 ) - s[4] ) / dx, 0.5f * ( s[7] - value( i + 1, index( dim, j - 1 ), k + 1 ) ) / dy,
-                     0.5f * ( value( i + 1, j, index( dim, k + 2 ) ) - s[1] ) / dz };
+            n[5] = { 
+                0.5f * ( value( index( i + 2 * df ), j, k + df ) - s[4] ) / dx, 
+                0.5f * ( s[7] - value( i + df, index( j - df ), k + df ) ) / dy,
+                0.5f * ( value( i + df, j, index( k + 2 * df ) ) - s[1] ) / dz };
 
             // vertex 6
-            n[6] = { 0.5f * ( s[7] - value( index( dim, i - 1 ), j + 1, k + 1 ) ) / dx, 0.5f * ( value( i, index( dim, j + 2 ), k + 1 ) - s[4] ) / dy,
-                     0.5f * ( value( i, j + 1, index( dim, k + 2 ) ) - s[2] ) / dz };
+            n[6] = { 
+                0.5f * ( s[7] - value( index( i - df ), j + df, k + df ) ) / dx, 
+                0.5f * ( value( i, index( j + 2 * df ), k + df ) - s[4] ) / dy,
+                0.5f * ( value( i, j + df, index( k + 2 * df ) ) - s[2] ) / dz };
 
             // vertex 7
-            n[7] = { 0.5f * ( value( index( dim, i + 2 ), j + 1, k + 1 ) - s[6] ) / dx,
-                     0.5f * ( value( i + 1, index( dim, j + 2 ), k + 1 ) - s[5] ) / dy,
-                     0.5f * ( value( i + 1, j + 1, index( dim, k + 2 ) ) - s[3] ) / dz };
+            n[7] = { 0.5f * ( value( index( i + 2 * df ), j + df, k + df ) - s[6] ) / dx,
+                     0.5f * ( value( i + df, index( j + 2 * df ), k + df ) - s[5] ) / dy,
+                     0.5f * ( value( i + df, j + df, index( k + 2 * df ) ) - s[3] ) / dz };
         }
 
         Point_3 position( const std::size_t x, const std::size_t y, const std::size_t z ) const {

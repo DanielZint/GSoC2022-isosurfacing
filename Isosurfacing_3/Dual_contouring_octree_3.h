@@ -159,6 +159,18 @@ namespace CGAL {
             edge_intersection_normals.push_back( n_lerp );
         }
 
+        // MC Polygon Center of Mass
+        if( false ) {
+            Vector_3 com_vec( 0, 0, 0 );
+
+            for( int i = 0; i < edge_intersections.size(); ++i ) {
+                com_vec += edge_intersections[i] - CGAL::ORIGIN;
+            }
+
+            Point_3 p = CGAL::ORIGIN + com_vec / edge_intersections.size();
+            point     = p;
+        }
+
         // SVD QEM
         if( true ) {
             Eigen::Matrix3d A;
