@@ -1,9 +1,11 @@
 #pragma once
 
 #include <CGAL/Simple_cartesian.h>
+#include <CGAL/Exact_predicates_inexact_constructions_kernel.h>
 #include <CGAL/Surface_mesh.h>
 
-typedef CGAL::Simple_cartesian<float> Kernel;
+// typedef CGAL::Simple_cartesian<float> Kernel;
+typedef CGAL::Exact_predicates_inexact_constructions_kernel Kernel;
 typedef typename Kernel::FT FT;
 typedef typename Kernel::Vector_3 Vector_3;
 typedef typename Kernel::Point_3 Point_3;
