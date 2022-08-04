@@ -22,141 +22,50 @@ namespace CGAL {
     /// <param name="k"></param>
     /// <returns> true, if there is a point in the cell</returns>
     template<class Domain_, bool use_bbox = false>
-    bool get_vertex_position( const Domain_& domain, const typename Domain_::FT iso_value, const std::size_t& i, const std::size_t& j,
-                              const std::size_t& k, typename Domain_::Point_3& point ) {
+    bool get_vertex_position( const Domain_& domain, const typename Domain_::FT iso_value, const typename Domain_::Voxel_handle& vh,
+                              typename Domain_::Point_3& point ) {
         typedef typename Domain_::Point_3 Point_3;
         typedef typename Domain_::Vector_3 Vector_3;
 
-        std::array<Domain_::FT, 8> s = domain.voxel_values(i,j,k);
+        std::array<Domain_::FT, Tables::N_VERTICES> s = domain.voxel_values( vh );
 
-        std::array<bool, 8> b;
-        b[0] = s[0] <= iso_value;
-        b[1] = s[1] <= iso_value;
-        b[2] = s[2] <= iso_value;
-        b[3] = s[3] <= iso_value;
-        b[4] = s[4] <= iso_value;
-        b[5] = s[5] <= iso_value;
-        b[6] = s[6] <= iso_value;
-        b[7] = s[7] <= iso_value;
+        std::array<bool, Tables::N_VERTICES> b;
+        std::transform( s.begin(), s.end(), b.begin(), [iso_value]( const auto& e ) { return e <= iso_value; } );
 
         unsigned int cubeindex = 0;
         // set bit if corresponding corner is below iso
-        cubeindex |= b[0] << 0;
-        cubeindex |= b[1] << 1;
-        cubeindex |= b[2] << 2;
-        cubeindex |= b[3] << 3;
-        cubeindex |= b[4] << 4;
-        cubeindex |= b[5] << 5;
-        cubeindex |= b[6] << 6;
-        cubeindex |= b[7] << 7;
+        for( int i = 0; i < Tables::N_VERTICES; ++i ) {
+            cubeindex |= b[i] << i;
+        }
 
         if( cubeindex == 0 || cubeindex == 255 ) {
             return false;
         }
 
-        std::array<Point_3, 8> p = domain.voxel_vertex_positions( i, j, k );
-        std::array<Vector_3, 8> pos;
-        pos[0] = p[0] - CGAL::ORIGIN;
-        pos[1] = p[1] - CGAL::ORIGIN;
-        pos[2] = p[2] - CGAL::ORIGIN;
-        pos[3] = p[3] - CGAL::ORIGIN;
-        pos[4] = p[4] - CGAL::ORIGIN;
-        pos[5] = p[5] - CGAL::ORIGIN;
-        pos[6] = p[6] - CGAL::ORIGIN;
-        pos[7] = p[7] - CGAL::ORIGIN;
+        std::array<Point_3, Tables::N_VERTICES> p = domain.voxel_vertex_positions( vh );
+        std::array<Vector_3, Tables::N_VERTICES> pos;
+        std::transform( p.begin(), p.end(), pos.begin(), []( const auto& e ) { return e - CGAL::ORIGIN; } );
 
         point = CGAL::ORIGIN + ( pos[0] + 0.5 * ( pos[7] - pos[0] ) );    // set point to voxel center
 
-        std::array<Vector_3, 8> normals;
-        domain.gradient( normals, s, i, j, k );
+        std::array<Vector_3, Tables::N_VERTICES> normals;
+        domain.gradient( normals, s, vh );
 
         // compute edge intersections
         std::vector<Point_3> edge_intersections;
         std::vector<Vector_3> edge_intersection_normals;
 
-        if( b[0] != b[1] ) {    // e0
-            const FT u           = ( s[0] - iso_value ) / ( s[0] - s[1] );
-            const Point_3 p_lerp = CGAL::ORIGIN + ( ( 1 - u ) * pos[0] + u * pos[1] );
-            edge_intersections.push_back( p_lerp );
-            const Vector_3 n_lerp = ( 1 - u ) * normals[0] + u * normals[1];
-            edge_intersection_normals.push_back( n_lerp );
-        }
-        if( b[1] != b[3] ) {    // e1
-            const FT u           = ( s[1] - iso_value ) / ( s[1] - s[3] );
-            const Point_3 p_lerp = CGAL::ORIGIN + ( ( 1 - u ) * pos[1] + u * pos[3] );
-            edge_intersections.push_back( p_lerp );
-            const Vector_3 n_lerp = ( 1 - u ) * normals[1] + u * normals[3];
-            edge_intersection_normals.push_back( n_lerp );
-        }
-        if( b[2] != b[3] ) {    // e2
-            const FT u           = ( s[2] - iso_value ) / ( s[2] - s[3] );
-            const Point_3 p_lerp = CGAL::ORIGIN + ( ( 1 - u ) * pos[2] + u * pos[3] );
-            edge_intersections.push_back( p_lerp );
-            const Vector_3 n_lerp = ( 1 - u ) * normals[2] + u * normals[3];
-            edge_intersection_normals.push_back( n_lerp );
-        }
-        if( b[0] != b[2] ) {    // e3
-            const FT u           = ( s[0] - iso_value ) / ( s[0] - s[2] );
-            const Point_3 p_lerp = CGAL::ORIGIN + ( ( 1 - u ) * pos[0] + u * pos[2] );
-            edge_intersections.push_back( p_lerp );
-            const Vector_3 n_lerp = ( 1 - u ) * normals[0] + u * normals[2];
-            edge_intersection_normals.push_back( n_lerp );
-        }
-        if( b[4] != b[5] ) {    // e4
-            const FT u           = ( s[4] - iso_value ) / ( s[4] - s[5] );
-            const Point_3 p_lerp = CGAL::ORIGIN + ( ( 1 - u ) * pos[4] + u * pos[5] );
-            edge_intersections.push_back( p_lerp );
-            const Vector_3 n_lerp = ( 1 - u ) * normals[4] + u * normals[5];
-            edge_intersection_normals.push_back( n_lerp );
-        }
-        if( b[5] != b[7] ) {    // e5
-            const FT u           = ( s[5] - iso_value ) / ( s[5] - s[7] );
-            const Point_3 p_lerp = CGAL::ORIGIN + ( ( 1 - u ) * pos[5] + u * pos[7] );
-            edge_intersections.push_back( p_lerp );
-            const Vector_3 n_lerp = ( 1 - u ) * normals[5] + u * normals[7];
-            edge_intersection_normals.push_back( n_lerp );
-        }
-        if( b[6] != b[7] ) {    // e6
-            const FT u           = ( s[6] - iso_value ) / ( s[6] - s[7] );
-            const Point_3 p_lerp = CGAL::ORIGIN + ( ( 1 - u ) * pos[6] + u * pos[7] );
-            edge_intersections.push_back( p_lerp );
-            const Vector_3 n_lerp = ( 1 - u ) * normals[6] + u * normals[7];
-            edge_intersection_normals.push_back( n_lerp );
-        }
-        if( b[4] != b[6] ) {    // e7
-            const FT u           = ( s[4] - iso_value ) / ( s[4] - s[6] );
-            const Point_3 p_lerp = CGAL::ORIGIN + ( ( 1 - u ) * pos[4] + u * pos[6] );
-            edge_intersections.push_back( p_lerp );
-            const Vector_3 n_lerp = ( 1 - u ) * normals[4] + u * normals[6];
-            edge_intersection_normals.push_back( n_lerp );
-        }
-        if( b[0] != b[4] ) {    // e8
-            const FT u           = ( s[0] - iso_value ) / ( s[0] - s[4] );
-            const Point_3 p_lerp = CGAL::ORIGIN + ( ( 1 - u ) * pos[0] + u * pos[4] );
-            edge_intersections.push_back( p_lerp );
-            const Vector_3 n_lerp = ( 1 - u ) * normals[0] + u * normals[4];
-            edge_intersection_normals.push_back( n_lerp );
-        }
-        if( b[1] != b[5] ) {    // e9
-            const FT u           = ( s[1] - iso_value ) / ( s[1] - s[5] );
-            const Point_3 p_lerp = CGAL::ORIGIN + ( ( 1 - u ) * pos[1] + u * pos[5] );
-            edge_intersections.push_back( p_lerp );
-            const Vector_3 n_lerp = ( 1 - u ) * normals[1] + u * normals[5];
-            edge_intersection_normals.push_back( n_lerp );
-        }
-        if( b[3] != b[7] ) {    // e10
-            const FT u           = ( s[3] - iso_value ) / ( s[3] - s[7] );
-            const Point_3 p_lerp = CGAL::ORIGIN + ( ( 1 - u ) * pos[3] + u * pos[7] );
-            edge_intersections.push_back( p_lerp );
-            const Vector_3 n_lerp = ( 1 - u ) * normals[3] + u * normals[7];
-            edge_intersection_normals.push_back( n_lerp );
-        }
-        if( b[2] != b[6] ) {    // e11
-            const FT u           = ( s[2] - iso_value ) / ( s[2] - s[6] );
-            const Point_3 p_lerp = CGAL::ORIGIN + ( ( 1 - u ) * pos[2] + u * pos[6] );
-            edge_intersections.push_back( p_lerp );
-            const Vector_3 n_lerp = ( 1 - u ) * normals[2] + u * normals[6];
-            edge_intersection_normals.push_back( n_lerp );
+        for( int i = 0; i < Tables::N_EDGES; ++i ) {
+            const auto& v0 = Tables::edge_to_vertex[i][0];
+            const auto& v1 = Tables::edge_to_vertex[i][1];
+
+            if( b[v0] != b[v1] ) {    // e0
+                const FT u           = ( s[v0] - iso_value ) / ( s[v0] - s[v1] );
+                const Point_3 p_lerp = CGAL::ORIGIN + ( ( 1 - u ) * pos[v0] + u * pos[v1] );
+                edge_intersections.push_back( p_lerp );
+                const Vector_3 n_lerp = ( 1 - u ) * normals[v0] + u * normals[v1];
+                edge_intersection_normals.push_back( n_lerp );
+            }
         }
 
         // MC Polygon Center of Mass
@@ -230,143 +139,42 @@ namespace CGAL {
         size_t points_counter = 0;
         std::map<Octree_edge_index, std::array<size_t, 4>> quads;
 
-        const std::size_t size_k = domain.size_x();
-        const std::size_t size_j = domain.size_y();
-        const std::size_t size_i = domain.size_z();
+        const std::size_t n_voxel = domain.n_voxels();
 
         // save all points
         if( use_bbox ) {
-            for( int k = 0; k < size_k; k++ ) {
-                for( int j = 0; j < size_j; j++ ) {
-                    for( int i = 0; i < size_i; i++ ) {
-                        if( !domain.exists( i, j, k ) ) {
-                            continue;
-                        }
-                        Point_3 p;
-                        if( get_vertex_position<Domain_, true>( domain, iso_value, i, j, k, p ) ) {
-                            const size_t voxel_id           = domain.lex_index( i, j, k );
-                            map_voxel_to_point[voxel_id]    = p;
-                            map_voxel_to_point_id[voxel_id] = points_counter++;
-                        }
-                    }
+            for( int i = 0; i < n_voxel; ++i ) {
+                const auto& vh = domain.voxels()[i];
+                Point_3 p;
+                if( get_vertex_position<Domain_, true>( domain, iso_value, vh, p ) ) {
+                    map_voxel_to_point[vh]    = p;
+                    map_voxel_to_point_id[vh] = points_counter++;
                 }
             }
         } else {
-            for( int k = 0; k < size_k; k++ ) {
-                for( int j = 0; j < size_j; j++ ) {
-                    for( int i = 0; i < size_i; i++ ) {
-                        if( !domain.exists( i, j, k ) ) {
-                            continue;
-                        }
-                        Point_3 p;
-                        if( get_vertex_position( domain, iso_value, i, j, k, p ) ) {
-                            const size_t voxel_id           = domain.lex_index( i, j, k );
-                            map_voxel_to_point[voxel_id]    = p;
-                            map_voxel_to_point_id[voxel_id] = points_counter++;
-                        }
-                    }
+            for( int i = 0; i < n_voxel; ++i ) {
+                const auto& vh = domain.voxels()[i];
+                Point_3 p;
+                if( get_vertex_position( domain, iso_value, vh, p ) ) {
+                    map_voxel_to_point[vh]    = p;
+                    map_voxel_to_point_id[vh] = points_counter++;
                 }
             }
         }
 
-        // iterate through edges
         const std::size_t n_edges = domain.n_edges();
         const auto& edges         = domain.edges();
 
+        // save all quads
         for( const auto& e: edges ) {
             const auto& [s0, s1] = domain.edge_values( e );
 
             if( s0 <= iso_value && s1 > iso_value ) {
-                const auto voxels    = domain.voxels_incident_to_edge( e );
-                quads[e] = voxels;
-            }
-            else if( s1 <= iso_value && s0 > iso_value ) {
-                const auto voxels       = domain.voxels_incident_to_edge( e );
-                quads[e] = { voxels[0], voxels[3], voxels[2], voxels[1] };
-            }
-        }
-
-        // save all quads
-        if( false ) {
-            for( int k = 0; k < size_k; k++ ) {
-                for( int j = 0; j < size_j; j++ ) {
-                    for( int i = 0; i < size_i; i++ ) {
-                        if( !domain.exists( i, j, k ) ) {
-                            continue;
-                        }
-                        const auto s = domain.voxel_values( i, j, k );
-
-                        unsigned int cubeindex = 0;
-                        // set bit if corresponding corner is below iso
-                        cubeindex |= ( s[0] <= iso_value ) << 0;
-                        cubeindex |= ( s[1] <= iso_value ) << 1;
-                        cubeindex |= ( s[2] <= iso_value ) << 2;
-                        cubeindex |= ( s[3] <= iso_value ) << 3;
-                        cubeindex |= ( s[4] <= iso_value ) << 4;
-                        cubeindex |= ( s[5] <= iso_value ) << 5;
-                        cubeindex |= ( s[6] <= iso_value ) << 6;
-                        cubeindex |= ( s[7] <= iso_value ) << 7;
-
-                        if( cubeindex == 0 || cubeindex == 255 ) {
-                            continue;
-                        }
-
-                        // e0 x
-                        if( j > 0 && k > 0 ) {
-                            if( s[0] > iso_value && s[1] <= iso_value ) {
-                                const size_t a     = domain.lex_index( i, j, k );
-                                const size_t b     = domain.lex_index( i, j, k - 1 );
-                                const size_t c     = domain.lex_index( i, j - 1, k - 1 );
-                                const size_t d     = domain.lex_index( i, j - 1, k );
-                                const size_t e_idx = domain.e_glIndex( 0, i, j, k );
-                                quads[{ e_idx, 0 }] = { a, b, c, d };
-                            } else if( s[0] <= iso_value && s[1] > iso_value ) {
-                                const size_t a     = domain.lex_index( i, j, k );
-                                const size_t b     = domain.lex_index( i, j - 1, k );
-                                const size_t c     = domain.lex_index( i, j - 1, k - 1 );
-                                const size_t d     = domain.lex_index( i, j, k - 1 );
-                                const size_t e_idx = domain.e_glIndex( 0, i, j, k );
-                                quads[{ e_idx, 0 }]   = { a, b, c, d };
-                            }
-                        }
-                        // e3 y
-                        if( i > 0 && k > 0 ) {
-                            if( s[0] > iso_value && s[2] <= iso_value ) {
-                                const size_t a     = domain.lex_index( i, j, k );
-                                const size_t b     = domain.lex_index( i - 1, j, k );
-                                const size_t c     = domain.lex_index( i - 1, j, k - 1 );
-                                const size_t d     = domain.lex_index( i, j, k - 1 );
-                                const size_t e_idx = domain.e_glIndex( 3, i, j, k );
-                                quads[{ e_idx, 0 }] = { a, b, c, d };
-                            } else if( s[0] <= iso_value && s[2] > iso_value ) {
-                                const size_t a     = domain.lex_index( i, j, k );
-                                const size_t b     = domain.lex_index( i, j, k - 1 );
-                                const size_t c     = domain.lex_index( i - 1, j, k - 1 );
-                                const size_t d     = domain.lex_index( i - 1, j, k );
-                                const size_t e_idx = domain.e_glIndex( 3, i, j, k );
-                                quads[{ e_idx, 0 }] = { a, b, c, d };
-                            }
-                        }
-                        // e8 z
-                        if( i > 0 && j > 0 ) {
-                            if( s[0] > iso_value && s[4] <= iso_value ) {
-                                const size_t a     = domain.lex_index( i, j, k );
-                                const size_t b     = domain.lex_index( i, j - 1, k );
-                                const size_t c     = domain.lex_index( i - 1, j - 1, k );
-                                const size_t d     = domain.lex_index( i - 1, j, k );
-                                const size_t e_idx = domain.e_glIndex( 8, i, j, k );
-                                quads[{ e_idx, 0 }] = { a, b, c, d };
-                            } else if( s[0] <= iso_value && s[4] > iso_value ) {
-                                const size_t a     = domain.lex_index( i, j, k );
-                                const size_t b     = domain.lex_index( i - 1, j, k );
-                                const size_t c     = domain.lex_index( i - 1, j - 1, k );
-                                const size_t d     = domain.lex_index( i, j - 1, k );
-                                const size_t e_idx = domain.e_glIndex( 8, i, j, k );
-                                quads[{ e_idx, 0 }] = { a, b, c, d };
-                            }
-                        }
-                    }
-                }
+                const auto voxels = domain.voxels_incident_to_edge( e );
+                quads[e]          = voxels;
+            } else if( s1 <= iso_value && s0 > iso_value ) {
+                const auto voxels = domain.voxels_incident_to_edge( e );
+                quads[e]          = { voxels[0], voxels[3], voxels[2], voxels[1] };
             }
         }
 

@@ -21,9 +21,12 @@ namespace Tables {
      *  < z
      */
 
+    constexpr int N_VERTICES = 8;
+    constexpr int N_EDGES    = 12;
+
     // This table iterates around an edge of a voxel in positive direction, starting from the given voxel (0,0,0). The iteration is described in
     // coordinates relative to the given voxel. The last number is the local edge index.
-    constexpr int edge_to_voxel_neighbor[12][4][4] = {
+    constexpr int edge_to_voxel_neighbor[N_EDGES][4][4] = {
         { { 0, 0, 0, 0 }, { 0, -1, 0, 2 }, { 0, -1, -1, 6 }, { 0, 0, -1, 4 } },      // e0
         { { 0, 0, 0, 1 }, { 1, 0, 0, 3 }, { 1, 0, -1, 7 }, { 0, 0, -1, 5 } },        // e1
         { { 0, 0, 0, 2 }, { 0, 0, -1, 6 }, { 0, 1, -1, 4 }, { 0, 1, 0, 0 } },        // e2
@@ -47,7 +50,7 @@ namespace Tables {
     constexpr int edge_store_index[3] = { 0, 3, 8 };
 
     // The local vertex indices of an edge. The indices are sorted by axis direction.
-    constexpr int edge_to_vertex[12][2] = {
+    constexpr int edge_to_vertex[N_EDGES][2] = {
         { 0, 1 },    // e0
         { 1, 3 },    // e1
         { 2, 3 },    // e2
@@ -63,7 +66,7 @@ namespace Tables {
     };
 
     // The local vertex coordinates within a voxel.
-    constexpr int local_vertex_position[8][3] = {
+    constexpr int local_vertex_position[N_VERTICES][3] = {
         { 0, 0, 0 },    // v0
         { 1, 0, 0 },    // v1
         { 0, 1, 0 },    // v2
@@ -72,6 +75,18 @@ namespace Tables {
         { 1, 0, 1 },    // v5
         { 0, 1, 1 },    // v6
         { 1, 1, 1 }     // v7
+    };
+
+    // The local vertex coordinates within a voxel in binary format.
+    constexpr int local_vertex_position_binary[N_VERTICES] = {
+        0b000,    // v0
+        0b001,    // v1
+        0b010,    // v2
+        0b011,    // v3
+        0b100,    // v4
+        0b101,    // v5
+        0b110,    // v6
+        0b111     // v7
     };
 
 }    // namespace Tables
