@@ -1,6 +1,7 @@
 #pragma once
 
 #include "types.h"
+#include "Octree_tables.h"
 
 #include <CGAL/Octree.h>
 #include <CGAL/Orthtree/Split_predicates.h>    // TODO just for implementation. Delete include later.
@@ -60,36 +61,19 @@ struct Split_by_ratio {
 class OctreeWrapper {
     /*
      * Naming convention from "A parallel dual marching cubes approach to quad only surface reconstruction - Grosso & Zint"
-     *        ^ z
-     *        |
-     *        v4------e7------v6
-     *       /|              /|
-     *      e4|             e6|
-     *     /  e8           / e11
-     *   v5------e5------v7   |
-     *   |    |          |    |
-     *   |    v0------e3-|----v2 --> y
-     *   e9  /          e10  /
-     *   |  e0           |  e2
-     *   | /             | /
-     *   v1------e1------v3
-     *   /
-     *  < x
-     *
-     * Rotated to Meshlab coordinate system:
      *
      *        ^ y
      *        |
-     *        v2------e2------v3
-     *       /|              /|
-     *     e11|            e10|
-     *     /  e3           /  e1
-     *   v6------e6------v7   |
-     *   |    |          |    |
-     *   |    v0------e0-|----v1 --> x
-     *   e7  /           e5  /
-     *   |  e8           |  e9
-     *   | /             | /
+     *       v2------e2------v3
+     *       /|             /|
+     *     e11|           e10|
+     *     /  e3          /  e1
+     *   v6------e6------v7  |
+     *    |   |          |   |
+     *    |  v0------e0--|---v1 --> x
+     *    e7 /           e5 /
+     *    | e8           | e9
+     *    |/             |/
      *   v4------e4------v5
      *   /
      *  < z
@@ -143,7 +127,7 @@ class OctreeWrapper {
             const auto& coords_uniform = uniform_coordinates( node );
             const auto& depth          = node.depth();
             const auto& df             = depth_factor( node );
-            for( const auto& edge_voxels: edge_to_voxel_neighbor_table ) {
+            for( const auto& edge_voxels: Tables::edge_to_voxel_neighbor ) {
                 bool are_all_nodes_leafs = true;
                 for( const auto& node_ijk: edge_voxels ) {
                     const std::size_t x = coords_uniform[0] + df * node_ijk[0];
@@ -404,8 +388,8 @@ class OctreeWrapper {
         const auto [i0, j0, k0]   = ijk_index( v0_lex_index, depth );
 
         // v1
-        const std::size_t e_local_index = edge_store_index[e_global_id % 3];
-        const auto& v1_local            = local_vertex_position_table[edge_to_vertex_table[e_local_index][1]];
+        const std::size_t e_local_index = Tables::edge_store_index[e_global_id % 3];
+        const auto& v1_local            = Tables::local_vertex_position[Tables::edge_to_vertex[e_local_index][1]];
 
         const std::size_t i1 = i0 + v1_local[0];
         const std::size_t j1 = j0 + v1_local[1];
@@ -421,7 +405,7 @@ class OctreeWrapper {
     /// <returns></returns>
     std::array<std::size_t, 4> voxels_incident_to_edge( const Octree_edge_index& e_id ) const {
         const auto& [e_global_id, depth] = e_id;
-        const std::size_t e_local_index  = edge_store_index[e_global_id % 3];
+        const std::size_t e_local_index  = Tables::edge_store_index[e_global_id % 3];
 
         const auto df = depth_factor( depth );
 
@@ -431,7 +415,7 @@ class OctreeWrapper {
         j *= df;
         k *= df;
 
-        const auto& voxel_neighbors = edge_to_voxel_neighbor_table[e_local_index];
+        const auto& voxel_neighbors = Tables::edge_to_voxel_neighbor[e_local_index];
         Octree::Node n0 = get_node(i + voxel_neighbors[0][0],j + voxel_neighbors[0][1],k + voxel_neighbors[0][2]);
         Octree::Node n1 = get_node(i + voxel_neighbors[1][0],j + voxel_neighbors[1][1],k + voxel_neighbors[1][2]);
         Octree::Node n2 = get_node(i + voxel_neighbors[2][0],j + voxel_neighbors[2][1],k + voxel_neighbors[2][2]);
@@ -491,48 +475,4 @@ class OctreeWrapper {
     }
 
   private:
-    // The edge table follows the convention from "A parallel dual marching cubes approach to quad only surface reconstruction - Grosso & Zint".
-    // The table contains the required operations in i/j/k direction to get to the voxel. The last number is the local edge index.
-    int edge_to_voxel_neighbor_table[12][4][4] = {
-        { { 0, 0, 0, 0 }, { 0, -1, 0, 2 }, { 0, -1, -1, 6 }, { 0, 0, -1, 4 } },      // e0
-        { { 0, 0, 0, 1 }, { 1, 0, 0, 3 }, { 1, 0, -1, 7 }, { 0, 0, -1, 5 } },        // e1
-        { { 0, 0, 0, 2 }, { 0, 0, -1, 6 }, { 0, 1, -1, 4 }, { 0, 1, 0, 0 } },        // e2
-        { { 0, 0, 0, 3 }, { 0, 0, -1, 7 }, { -1, 0, -1, 5 }, { -1, 0, 0, 1 } },      // e3
-        { { 0, 0, 0, 4 }, { 0, 0, 1, 0 }, { 0, -1, 1, 2 }, { 0, -1, 0, 6 } },        // e4
-        { { 0, 0, 0, 5 }, { 0, 0, 1, 1 }, { 1, 0, 1, 3 }, { 1, 0, 0, 7 } },          // e5
-        { { 0, 0, 0, 6 }, { 0, 1, 0, 4 }, { 0, 1, 1, 0 }, { 0, 0, 1, 2 } },          // e6
-        { { 0, 0, 0, 7 }, { -1, 0, 0, 5 }, { -1, 0, 1, 1 }, { 0, 0, 1, 3 } },        // e7
-        { { 0, 0, 0, 8 }, { -1, 0, 0, 9 }, { -1, -1, 0, 10 }, { 0, -1, 0, 11 } },    // e8
-        { { 0, 0, 0, 9 }, { 0, -1, 0, 10 }, { 1, -1, 0, 11 }, { 1, 0, 0, 8 } },      // e9
-        { { 0, 0, 0, 10 }, { 1, 0, 0, 11 }, { 1, 1, 0, 8 }, { 0, 1, 0, 9 } },        // e10
-        { { 0, 0, 0, 11 }, { 0, 1, 0, 8 }, { -1, 1, 0, 9 }, { -1, 0, 0, 10 } }       // e11
-    };
-
-    int edge_store_index[3] = { 0, 3, 8 };
-
-    int edge_to_vertex_table[12][2] = {
-        { 0, 1 },    // e0
-        { 1, 3 },    // e1
-        { 2, 3 },    // e2
-        { 0, 2 },    // e3
-        { 4, 5 },    // e4
-        { 5, 7 },    // e5
-        { 6, 7 },    // e6
-        { 4, 6 },    // e7
-        { 0, 4 },    // e8
-        { 1, 5 },    // e9
-        { 3, 7 },    // e10
-        { 2, 6 }     // e11
-    };
-
-    int local_vertex_position_table[8][3] = {
-        { 0, 0, 0 },    // v0
-        { 1, 0, 0 },    // v1
-        { 0, 1, 0 },    // v2
-        { 1, 1, 0 },    // v3
-        { 0, 0, 1 },    // v4
-        { 1, 0, 1 },    // v5
-        { 0, 1, 1 },    // v6
-        { 1, 1, 1 }     // v7
-    };
 };
