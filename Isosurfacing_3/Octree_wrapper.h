@@ -114,7 +114,9 @@ class OctreeWrapper {
         }
         dim_ = std::size_t( 1 ) << max_depth_;
         hx_  = bbox.x_span() / dim_;
+    }
 
+    void refine() {
         octree_.refine( Split_by_ratio( 2, max_depth_ ) );
 
         for( Octree::Node node: octree_.traverse<CGAL::Orthtrees::Leaves_traversal>() ) {
@@ -126,7 +128,7 @@ class OctreeWrapper {
             // init vertex values
             for( int i = 0; i < Tables::N_VERTICES; ++i ) {
                 Octree_uniform_coords vuc = vertex_uniform_coordinates( node, i );
-                const auto lex            = lex_index_vertex( vuc[0], vuc[1], vuc[2], max_depth_ );
+                const auto lex            = lex_index( vuc[0], vuc[1], vuc[2], max_depth_ );
                 leaf_vertices_.insert( lex );
                 vertex_values_[lex] = 0;
             }
@@ -134,7 +136,7 @@ class OctreeWrapper {
             // write all leaf edges in a set
             const auto& coords_global = node.global_coordinates();
             const auto& depth         = node.depth();
-            const auto& df            = depth_factor( node );
+            const auto& df            = depth_factor( node.depth() );
             for( const auto& edge_voxels: Tables::edge_to_voxel_neighbor ) {
                 bool are_all_nodes_leafs = true;
                 for( const auto& node_ijk: edge_voxels ) {
@@ -169,13 +171,22 @@ class OctreeWrapper {
     FT offset_z() const { return offset_z_; }
     std::size_t max_depth() const { return max_depth_; }
 
-    std::size_t depth_factor( const std::size_t& depth ) const { return std::size_t( 1 ) << ( max_depth_ - depth ); }
+    const std::set<Octree_edge_index>& leaf_edges() const { return leaf_edges_; }
+    const std::set<Vertex_handle>& leaf_vertices() const { return leaf_vertices_; }
+    const std::set<Vertex_handle>& leaf_voxels() const { return leaf_voxels_; }
 
-    std::size_t depth_factor( const Octree::Node& node ) const { return std::size_t( 1 ) << ( max_depth_ - node.depth() ); }
+    FT value( const Vertex_handle& v ) const { return vertex_values_.at( v ); }
+    FT& value( const Vertex_handle& v ) { return vertex_values_[v]; }
+
+    Vector_3 gradient( const Vertex_handle& v ) const { return vertex_gradients_.at( v ); }
+    Vector_3& gradient( const Vertex_handle& v ) { return vertex_gradients_[v]; }
+
+
+    std::size_t depth_factor( const std::size_t& depth ) const { return std::size_t( 1 ) << ( max_depth_ - depth ); }
 
     Octree_uniform_coords uniform_coordinates( const Octree::Node& node ) const {
         auto coords          = node.global_coordinates();
-        const std::size_t df = depth_factor( node );
+        const std::size_t df = depth_factor( node.depth() );
         for( int i = 0; i < Octree::Node::Dimension::value; ++i ) {
             coords[i] *= df;
         }
@@ -185,7 +196,7 @@ class OctreeWrapper {
 
     std::array<Point_3, 8> node_points( const Octree::Node& node ) const {
         auto coords          = node.global_coordinates();
-        const std::size_t df = depth_factor( node );
+        const std::size_t df = depth_factor( node.depth() );
 
         const FT x0 = offset_x_ + coords[0] * df * hx_;
         const FT y0 = offset_y_ + coords[1] * df * hx_;
@@ -216,7 +227,7 @@ class OctreeWrapper {
     }
 
     Point_3 point( const Vertex_handle& v ) const {
-        const auto [i, j, k] = ijk_index_vertex( v, max_depth_ );
+        const auto [i, j, k] = ijk_index( v, max_depth_ );
         const FT x0          = offset_x_ + i * hx_;
         const FT y0          = offset_y_ + j * hx_;
         const FT z0          = offset_z_ + k * hx_;
@@ -230,7 +241,7 @@ class OctreeWrapper {
             v_coords[i] += std::size_t( local_coords[i] );
         }
 
-        const auto df = depth_factor( node );
+        const auto df = depth_factor( node.depth() );
         for( int i = 0; i < Octree::Node::Dimension::value; ++i ) {
             v_coords[i] *= df;
         }
@@ -292,70 +303,26 @@ class OctreeWrapper {
         return get_node( i, j, k );
     }
 
-    /// <summary>
-    /// Check if the cell at uniform coordinates (i,j,k) exists in the leaf node set
-    /// </summary>
-    /// <param name="i">i-index of cell</param>
-    /// <param name="j">j-index of cell</param>
-    /// <param name="k">k-index of cell</param>
-    /// <returns></returns>
-    bool exists( const std::size_t& i, const std::size_t& j, const std::size_t& k ) const {
-        // Octree::Node::Global_coordinates coords = { (Octree_uniform_coords::value_type)i, (Octree_uniform_coords::value_type)j,
-        //                                            (Octree_uniform_coords::value_type)k };
-        const auto lex = lex_index( i, j, k, max_depth_ );
-        if( leaf_voxels_.find( lex ) != leaf_voxels_.end() ) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
     std::size_t lex_index( const std::size_t& i, const std::size_t& j, const std::size_t& k, const std::size_t& depth ) const {
-        std::size_t dim = std::size_t( 1 ) << depth;
-        return k * dim * dim + j * dim + i;
-    }
-
-    std::size_t lex_index_vertex( const std::size_t& i, const std::size_t& j, const std::size_t& k, const std::size_t& depth ) const {
         std::size_t dim = ( std::size_t( 1 ) << depth ) + 1;
         return k * dim * dim + j * dim + i;
     }
 
     std::size_t i_index( const std::size_t& lex_index, const std::size_t& depth ) const {
-        std::size_t dim = std::size_t( 1 ) << depth;
+        std::size_t dim = ( std::size_t( 1 ) << depth ) + 1;
         return lex_index % dim;
     }
-
     std::size_t j_index( const std::size_t& lex_index, const std::size_t& depth ) const {
-        std::size_t dim = std::size_t( 1 ) << depth;
+        std::size_t dim = ( std::size_t( 1 ) << depth ) + 1;
         return ( ( lex_index / dim ) % dim );
     }
-
     std::size_t k_index( const std::size_t& lex_index, const std::size_t& depth ) const {
-        std::size_t dim = std::size_t( 1 ) << depth;
+        std::size_t dim = ( std::size_t( 1 ) << depth ) + 1;
         return ( lex_index / ( dim * dim ) );
     }
 
     std::tuple<std::size_t, std::size_t, std::size_t> ijk_index( const std::size_t& lex_index, const std::size_t& depth ) const {
         return std::make_tuple( i_index( lex_index, depth ), j_index( lex_index, depth ), k_index( lex_index, depth ) );
-    }
-
-    std::size_t i_index_vertex( const std::size_t& lex_index, const std::size_t& depth ) const {
-        std::size_t dim = ( std::size_t( 1 ) << depth ) + 1;
-        return lex_index % dim;
-    }
-
-    std::size_t j_index_vertex( const std::size_t& lex_index, const std::size_t& depth ) const {
-        std::size_t dim = ( std::size_t( 1 ) << depth ) + 1;
-        return ( ( lex_index / dim ) % dim );
-    }
-
-    std::size_t k_index_vertex( const std::size_t& lex_index, const std::size_t& depth ) const {
-        std::size_t dim = ( std::size_t( 1 ) << depth ) + 1;
-        return ( lex_index / ( dim * dim ) );
-    }
-
-    std::tuple<std::size_t, std::size_t, std::size_t> ijk_index_vertex( const std::size_t& lex_index, const std::size_t& depth ) const {
-        return std::make_tuple( i_index_vertex( lex_index, depth ), j_index_vertex( lex_index, depth ), k_index_vertex( lex_index, depth ) );
     }
 
     /// <summary>
@@ -376,46 +343,15 @@ class OctreeWrapper {
         return ( 3 * lex_index( i, j, k, depth ) + offs );
     }
 
-    bool is_leaf_edge( const std::size_t& e_global_index, const std::size_t& depth ) {
-        if( leaf_edges_.find( { e_global_index, depth } ) != leaf_edges_.end() ) {
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    const std::set<Octree_edge_index>& leaf_edges() const { return leaf_edges_; }
-
-    const std::set<Vertex_handle>& leaf_vertices() const { return leaf_vertices_; }
-
-    const std::set<Vertex_handle>& leaf_voxels() const { return leaf_voxels_; }
-
-    FT value( const std::size_t i, const std::size_t j, const std::size_t k ) const {
-        const auto lex = lex_index_vertex( i, j, k, max_depth_ );
-        return vertex_values_.at( lex );
-    }
-
-    FT& value( const std::size_t i, const std::size_t j, const std::size_t k ) {
-        const auto lex = lex_index_vertex( i, j, k, max_depth_ );
-        return vertex_values_[lex];
-    }
-
-    FT value( const Vertex_handle& v ) const { return vertex_values_.at( v ); }
-
-    FT& value( const Vertex_handle& v ) { return vertex_values_[v]; }
-
-    Vector_3 gradient( const Vertex_handle& v ) const { return vertex_gradients_.at( v ); }
-
-    Vector_3& gradient( const Vertex_handle& v ) { return vertex_gradients_[v]; }
-
-    std::array<FT, 8> voxel_values( const std::size_t i, const std::size_t j, const std::size_t k ) const {
-        Octree::Node node = get_node( i, j, k );
-        const auto& df    = depth_factor( node );
+    std::array<FT, 8> voxel_values( const Voxel_handle& vox ) const {
+        const auto [i, j, k] = ijk_index( vox, max_depth_ );
+        Octree::Node node    = get_node( i, j, k );
+        const auto& df       = depth_factor( node.depth() );
 
         std::array<Vertex_handle, 8> v;
         for( int v_id = 0; v_id < Tables::N_VERTICES; ++v_id ) {
             const auto& l  = Tables::local_vertex_position[v_id];
-            const auto lex = lex_index_vertex( i + df * l[0], j + df * l[1], k + df * l[2], max_depth_ );
+            const auto lex = lex_index( i + df * l[0], j + df * l[1], k + df * l[2], max_depth_ );
             v[v_id]        = lex;
         }
 
@@ -424,21 +360,15 @@ class OctreeWrapper {
 
         return s;
     }
-
-    std::array<FT, 8> voxel_values( const std::size_t& lex_index ) const {
-        const auto [i, j, k] = ijk_index( lex_index, max_depth_ );
-        return voxel_values( i, j, k );
-    }
-
-    std::array<Vector_3, 8> voxel_gradients( const std::size_t& lex_index ) const {
-        const auto [i, j, k] = ijk_index( lex_index, max_depth_ );
-        Octree::Node node = get_node( i, j, k );
-        const auto& df    = depth_factor( node );
+    std::array<Vector_3, 8> voxel_gradients( const Voxel_handle& vox ) const {
+        const auto [i, j, k] = ijk_index( vox, max_depth_ );
+        Octree::Node node    = get_node( i, j, k );
+        const auto& df       = depth_factor( node.depth() );
 
         std::array<Vertex_handle, 8> v;
         for( int v_id = 0; v_id < Tables::N_VERTICES; ++v_id ) {
             const auto& l  = Tables::local_vertex_position[v_id];
-            const auto lex = lex_index_vertex( i + df * l[0], j + df * l[1], k + df * l[2], max_depth_ );
+            const auto lex = lex_index( i + df * l[0], j + df * l[1], k + df * l[2], max_depth_ );
             v[v_id]        = lex;
         }
 
@@ -447,7 +377,10 @@ class OctreeWrapper {
 
         return s;
     }
-
+    std::array<Point_3, 8> voxel_vertex_positions( const Voxel_handle& vox ) const {
+        Octree::Node node = get_node( vox );
+        return node_points( node );
+    }
     std::array<FT, 2> edge_values( const Octree_edge_index& e_id ) const {
         const auto& [e_global_id, depth] = e_id;
         const auto df                    = depth_factor( depth );
@@ -463,7 +396,10 @@ class OctreeWrapper {
         const std::size_t j1 = j0 + v1_local[1];
         const std::size_t k1 = k0 + v1_local[2];
 
-        return { value( df * i0, df * j0, df * k0 ), value( df * i1, df * j1, df * k1 ) };
+        const auto v0 = lex_index( df * i0, df * j0, df * k0, max_depth_ );
+        const auto v1 = lex_index( df * i1, df * j1, df * k1, max_depth_ );
+
+        return { value( v0 ), value( v1 ) };
     }
 
     /// <summary>
@@ -472,7 +408,7 @@ class OctreeWrapper {
     /// </summary>
     /// <param name="e_id"></param>
     /// <returns></returns>
-    std::array<std::size_t, 4> voxels_incident_to_edge( const Octree_edge_index& e_id ) const {
+    std::array<std::size_t, 4> edge_voxels( const Octree_edge_index& e_id ) const {
         const auto& [e_global_id, depth] = e_id;
         const std::size_t e_local_index  = Tables::edge_store_index[e_global_id % 3];
 
@@ -505,25 +441,10 @@ class OctreeWrapper {
         // return { value( i0, j0, k0 ), value( i1, j1, k1 ) };
     }
 
-    std::array<Point_3, 8> voxel_vertex_positions( const std::size_t i, const std::size_t j, const std::size_t k ) const {
-        Octree::Node node = get_node( i, j, k );
-        return node_points( node );
-    }
-
-    std::array<Point_3, 8> voxel_vertex_positions( const Voxel_handle& vh ) const {
-        Octree::Node node = get_node( vh );
-        return node_points( node );
-    }
-
     void print( const std::string& filename ) const {
         Mesh m;
         for( Octree::Node node: octree_.traverse<CGAL::Orthtrees::Leaves_traversal>() ) {
             auto coords = node.global_coordinates();
-            // if( coords[1] == 0 && coords[2] == 0 ) {
-            //    auto leaf_coords = global_leaf_coordinates( node );
-            //    std::cout << node << std::endl;
-            //    std::cout << leaf_coords[0] << " " << leaf_coords[1] << " " << leaf_coords[2] << std::endl;
-            //}
             std::array<Point_3, 8> p;
             p[0] = point( vertex_uniform_coordinates( node, 0b000 ) );
             p[1] = point( vertex_uniform_coordinates( node, 0b001 ) );

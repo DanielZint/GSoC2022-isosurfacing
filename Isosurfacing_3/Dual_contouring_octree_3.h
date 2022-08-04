@@ -48,8 +48,7 @@ namespace CGAL {
 
         point = CGAL::ORIGIN + ( pos[0] + 0.5 * ( pos[7] - pos[0] ) );    // set point to voxel center
 
-        std::array<Vector_3, Tables::N_VERTICES> normals;
-        domain.gradient( normals, s, vh );
+        std::array<Vector_3, Tables::N_VERTICES> normals = domain.gradient( vh );
 
         // compute edge intersections
         std::vector<Point_3> edge_intersections;
@@ -144,7 +143,7 @@ namespace CGAL {
         // save all points
         if( use_bbox ) {
             for( int i = 0; i < n_voxel; ++i ) {
-                const auto& vh = domain.voxels()[i];
+                const auto& vh = domain.voxels(i);
                 Point_3 p;
                 if( get_vertex_position<Domain_, true>( domain, iso_value, vh, p ) ) {
                     map_voxel_to_point[vh]    = p;
@@ -153,7 +152,7 @@ namespace CGAL {
             }
         } else {
             for( int i = 0; i < n_voxel; ++i ) {
-                const auto& vh = domain.voxels()[i];
+                const auto& vh = domain.voxels(i);
                 Point_3 p;
                 if( get_vertex_position( domain, iso_value, vh, p ) ) {
                     map_voxel_to_point[vh]    = p;
@@ -163,10 +162,10 @@ namespace CGAL {
         }
 
         const std::size_t n_edges = domain.n_edges();
-        const auto& edges         = domain.edges();
-
+        
         // save all quads
-        for( const auto& e: edges ) {
+        for( int i = 0; i < n_edges; ++i ) {
+            const auto& e        = domain.edges( i );
             const auto& [s0, s1] = domain.edge_values( e );
 
             if( s0 <= iso_value && s1 > iso_value ) {

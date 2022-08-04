@@ -22,6 +22,7 @@ Kernel::FT sphere_function( const Point_3& point ) { return std::sqrt( point.x()
 
 int main() {
     OctreeWrapper octree_wrap( 4, { -1, -1, -1, 1, 1, 1 } );
+    octree_wrap.refine();
     octree_wrap.print( "../octree.off" );
 
     CGAL::Octree_oracle octree_oracle( octree_wrap );
@@ -32,7 +33,7 @@ int main() {
 
     //#pragma omp parallel for
     for( int i = 0; i < n_vertices; ++i ) {
-        const auto& v = octree_oracle.vertices()[i];
+        const auto& v = octree_oracle.vertices(i);
         Point_3 p     = octree_oracle.position( v );
         const auto val         = sphere_function( p );
         Vector_3 gradient = p - CGAL::ORIGIN;
