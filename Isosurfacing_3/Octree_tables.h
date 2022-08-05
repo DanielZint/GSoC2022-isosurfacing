@@ -77,16 +77,4 @@ namespace Tables {
         { 1, 1, 1 }     // v7
     };
 
-    // The local vertex coordinates within a voxel in binary format.
-    constexpr int local_vertex_position_binary[N_VERTICES] = {
-        0b000,    // v0
-        0b001,    // v1
-        0b010,    // v2
-        0b011,    // v3
-        0b100,    // v4
-        0b101,    // v5
-        0b110,    // v6
-        0b111     // v7
-    };
-
 }    // namespace Tables

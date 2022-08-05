@@ -4,61 +4,8 @@
 #include "types.h"
 
 #include <CGAL/Octree.h>
-#include <CGAL/Orthtree/Split_predicates.h>    // TODO just for implementation. Delete include later.
 
-typedef CGAL::Octree<Kernel, std::vector<Point_3>> Octree;
-typedef Octree::Node::Global_coordinates Octree_uniform_coords;                               // coordinates on max depth level
-typedef std::tuple<Octree::Node::Global_coordinates, std::size_t> Octree_coords_and_depth;    // global coordinates + depth
-typedef std::tuple<std::size_t, std::size_t> Octree_edge_index;                               // edge uniform index + depth
-
-struct Split_by_ratio {
-    std::size_t min_depth_;
-    std::size_t max_depth_;
-
-    std::size_t octree_dim_;
-
-    Octree::Node::Global_coordinates global_leaf_coordinates( const Octree::Node& node ) const {
-        auto coords                    = node.global_coordinates();
-        const std::size_t depth_factor = std::size_t( 1 ) << ( max_depth_ - node.depth() );
-        for( int i = 0; i < Octree::Node::Dimension::value; ++i ) {
-            coords[i] *= depth_factor;
-        }
-
-        return coords;
-    }
-
-    Split_by_ratio( std::size_t min_depth, std::size_t max_depth ) : min_depth_( min_depth ), max_depth_( max_depth ) {
-        octree_dim_ = std::size_t( 1 ) << max_depth_;
-    }
-    /*!
-    \brief returns `true` if `n` should be split, `false` otherwise.
-   */
-    // template<class Node>
-    bool operator()( const Octree::Node& n ) const {
-        // n.depth()
-        if( n.depth() < min_depth_ ) {
-            return true;
-        }
-        if( n.depth() == max_depth_ ) {
-            return false;
-        }
-
-        auto leaf_coords = global_leaf_coordinates( n );
-
-        if( leaf_coords[0] >= octree_dim_ / 2 ) {
-            return false;
-        }
-        if( leaf_coords[1] >= octree_dim_ / 2 ) {
-            return false;
-        }
-        if( leaf_coords[2] >= octree_dim_ / 2 ) {
-            return false;
-        }
-        return true;
-    }
-};
-
-class OctreeWrapper {
+class Octree_wrapper {
     /*
      * Naming convention from "A parallel dual marching cubes approach to quad only surface reconstruction - Grosso & Zint"
      *
@@ -80,9 +27,13 @@ class OctreeWrapper {
      */
 
   public:
+    typedef CGAL::Octree<Kernel, std::vector<Point_3>> Octree;
+
     typedef std::size_t Vertex_handle;
     typedef std::tuple<std::size_t, std::size_t> Edge_handle;
     typedef std::size_t Voxel_handle;
+
+    typedef Octree::Node::Global_coordinates Uniform_coords;    // coordinates on max depth level
 
   private:
     std::size_t max_depth_ = 0;
@@ -91,45 +42,48 @@ class OctreeWrapper {
     FT offset_y_ = 0;
     FT offset_z_ = 0;
 
-    std::size_t dim_;
+    CGAL::Bbox_3 bbox_;
+
+    std::size_t dim_ = 1;
 
     FT hx_ = 0;
 
     Octree octree_;
 
-    // std::set<Octree_uniform_coords> leaf_node_uniform_coordinates_;
-    std::set<Voxel_handle> leaf_voxels_;
-    std::set<Edge_handle> leaf_edges_;
-    std::set<Vertex_handle> leaf_vertices_;
+    // std::set<Uniform_coords> leaf_node_uniform_coordinates_;
+    std::vector<Voxel_handle> leaf_voxels_;
+    std::vector<Edge_handle> leaf_edges_;
+    std::vector<Vertex_handle> leaf_vertices_;
     std::map<Vertex_handle, FT> vertex_values_;
     std::map<Vertex_handle, Vector_3> vertex_gradients_;
 
   public:
-    OctreeWrapper( const std::size_t max_depth, const CGAL::Bbox_3& bbox )
-        : max_depth_( max_depth ), offset_x_( bbox.xmin() ), offset_y_( bbox.ymin() ), offset_z_( bbox.zmin() ),
-          octree_( std::vector<Point_3> { { bbox.xmin(), bbox.ymin(), bbox.zmin() }, { bbox.xmax(), bbox.ymax(), bbox.zmax() } } ) {
-        if( max_depth_ < 1 ) {
-            std::cout << "tree depth must be larger than 0" << std::endl;
-            exit( -1 );
-        }
-        dim_ = std::size_t( 1 ) << max_depth_;
-        hx_  = bbox.x_span() / dim_;
-    }
+    Octree_wrapper( const CGAL::Bbox_3& bbox )
+        : bbox_( bbox ), offset_x_( bbox.xmin() ), offset_y_( bbox.ymin() ), offset_z_( bbox.zmin() ),
+          octree_( std::vector<Point_3> { { bbox.xmin(), bbox.ymin(), bbox.zmin() }, { bbox.xmax(), bbox.ymax(), bbox.zmax() } } ) {}
 
-    void refine() {
-        octree_.refine( Split_by_ratio( 2, max_depth_ ) );
+    template<class Split_predicate>
+    void refine( const Split_predicate& split_predicate ) {
+        octree_.refine( split_predicate );
 
+        max_depth_ = octree_.depth();
+        dim_       = std::size_t( 1 ) << max_depth_;
+        hx_        = bbox_.x_span() / dim_;
+
+        // store leaf elements in sets + initialize value maps
+        std::set<Voxel_handle> leaf_voxels_set;
+        std::set<Edge_handle> leaf_edges_set;
+        std::set<Vertex_handle> leaf_vertices_set;
         for( Octree::Node node: octree_.traverse<CGAL::Orthtrees::Leaves_traversal>() ) {
             const auto& coords_uniform = uniform_coordinates( node );
             // write all leaf nodes in a set
-            // leaf_node_uniform_coordinates_.insert( coords_uniform );
-            leaf_voxels_.insert( lex_index( coords_uniform[0], coords_uniform[1], coords_uniform[2], max_depth_ ) );
+            leaf_voxels_set.insert( lex_index( coords_uniform[0], coords_uniform[1], coords_uniform[2], max_depth_ ) );
 
             // init vertex values
             for( int i = 0; i < Tables::N_VERTICES; ++i ) {
-                Octree_uniform_coords vuc = vertex_uniform_coordinates( node, i );
-                const auto lex            = lex_index( vuc[0], vuc[1], vuc[2], max_depth_ );
-                leaf_vertices_.insert( lex );
+                Uniform_coords vuc = vertex_uniform_coordinates( node, i );
+                const auto lex     = lex_index( vuc[0], vuc[1], vuc[2], max_depth_ );
+                leaf_vertices_set.insert( lex );
                 vertex_values_[lex] = 0;
             }
 
@@ -138,30 +92,34 @@ class OctreeWrapper {
             const auto& depth         = node.depth();
             const auto& df            = depth_factor( node.depth() );
             for( const auto& edge_voxels: Tables::edge_to_voxel_neighbor ) {
-                bool are_all_nodes_leafs = true;
+                bool are_all_voxels_leafs = true;
                 for( const auto& node_ijk: edge_voxels ) {
                     const std::size_t x = coords_uniform[0] + df * node_ijk[0];
                     const std::size_t y = coords_uniform[1] + df * node_ijk[1];
                     const std::size_t z = coords_uniform[2] + df * node_ijk[2];
                     // check for overflow / ignore edges on boundary
                     if( x >= dim_ || y >= dim_ || z >= dim_ ) {
-                        are_all_nodes_leafs = false;
+                        are_all_voxels_leafs = false;
                         break;
                     }
 
                     const Octree::Node n = get_node( x, y, z );
                     if( n.depth() > depth ) {
-                        are_all_nodes_leafs = false;
+                        are_all_voxels_leafs = false;
                         break;
                     }
                 }
-                if( are_all_nodes_leafs ) {
+                if( are_all_voxels_leafs ) {
                     // add to leaf edge set
                     std::size_t e_gl = e_glIndex( edge_voxels[0][3], coords_global[0], coords_global[1], coords_global[2], depth );
-                    leaf_edges_.insert( { e_gl, depth } );
+                    leaf_edges_set.insert( { e_gl, depth } );
                 }
             }
         }
+
+        leaf_voxels_   = std::vector<Voxel_handle>( leaf_voxels_set.begin(), leaf_voxels_set.end() );
+        leaf_edges_    = std::vector<Edge_handle>( leaf_edges_set.begin(), leaf_edges_set.end() );
+        leaf_vertices_ = std::vector<Vertex_handle>( leaf_vertices_set.begin(), leaf_vertices_set.end() );
     }
 
     std::size_t dim() const { return dim_; }
@@ -171,9 +129,9 @@ class OctreeWrapper {
     FT offset_z() const { return offset_z_; }
     std::size_t max_depth() const { return max_depth_; }
 
-    const std::set<Octree_edge_index>& leaf_edges() const { return leaf_edges_; }
-    const std::set<Vertex_handle>& leaf_vertices() const { return leaf_vertices_; }
-    const std::set<Vertex_handle>& leaf_voxels() const { return leaf_voxels_; }
+    const std::vector<Edge_handle>& leaf_edges() const { return leaf_edges_; }
+    const std::vector<Vertex_handle>& leaf_vertices() const { return leaf_vertices_; }
+    const std::vector<Vertex_handle>& leaf_voxels() const { return leaf_voxels_; }
 
     FT value( const Vertex_handle& v ) const { return vertex_values_.at( v ); }
     FT& value( const Vertex_handle& v ) { return vertex_values_[v]; }
@@ -181,10 +139,9 @@ class OctreeWrapper {
     Vector_3 gradient( const Vertex_handle& v ) const { return vertex_gradients_.at( v ); }
     Vector_3& gradient( const Vertex_handle& v ) { return vertex_gradients_[v]; }
 
-
     std::size_t depth_factor( const std::size_t& depth ) const { return std::size_t( 1 ) << ( max_depth_ - depth ); }
 
-    Octree_uniform_coords uniform_coordinates( const Octree::Node& node ) const {
+    Uniform_coords uniform_coordinates( const Octree::Node& node ) const {
         auto coords          = node.global_coordinates();
         const std::size_t df = depth_factor( node.depth() );
         for( int i = 0; i < Octree::Node::Dimension::value; ++i ) {
@@ -219,7 +176,7 @@ class OctreeWrapper {
         return points;
     }
 
-    Point_3 point( const Octree_uniform_coords& vertex_coordinates ) const {
+    Point_3 point( const Uniform_coords& vertex_coordinates ) const {
         const FT x0 = offset_x_ + vertex_coordinates[0] * hx_;
         const FT y0 = offset_y_ + vertex_coordinates[1] * hx_;
         const FT z0 = offset_z_ + vertex_coordinates[2] * hx_;
@@ -234,7 +191,7 @@ class OctreeWrapper {
         return { x0, y0, z0 };
     }
 
-    Octree_uniform_coords vertex_uniform_coordinates( const Octree::Node& node, const Octree::Node::Local_coordinates local_coords ) const {
+    Uniform_coords vertex_uniform_coordinates( const Octree::Node& node, const Octree::Node::Local_coordinates local_coords ) const {
         const auto node_coords = node.global_coordinates();
         auto v_coords          = node_coords;
         for( int i = 0; i < Octree::Node::Dimension::value; ++i ) {
@@ -264,33 +221,6 @@ class OctreeWrapper {
                 loc[1] = true;
             }
             if( z & ( std::size_t( 1 ) << dist_to_max ) ) {
-                loc[2] = true;
-            }
-            node = node[loc.to_ulong()];
-        }
-        return node;
-    }
-
-    Octree::Node get_node( const Octree_coords_and_depth& cad ) const {
-        Octree::Node node           = octree_.root();
-        const auto& [coords, depth] = cad;
-        const std::size_t& x        = coords[0];
-        const std::size_t& y        = coords[1];
-        const std::size_t& z        = coords[2];
-        while( node.depth() != depth ) {
-            if( node.is_leaf() ) {
-                return node;
-            }
-            const std::size_t dist_to_max       = depth - node.depth() - 1;
-            const std::size_t mask              = std::size_t( 1 ) << dist_to_max;
-            Octree::Node::Local_coordinates loc = 0;
-            if( x & mask ) {
-                loc[0] = true;
-            }
-            if( y & mask ) {
-                loc[1] = true;
-            }
-            if( z & mask ) {
                 loc[2] = true;
             }
             node = node[loc.to_ulong()];
@@ -381,7 +311,13 @@ class OctreeWrapper {
         Octree::Node node = get_node( vox );
         return node_points( node );
     }
-    std::array<FT, 2> edge_values( const Octree_edge_index& e_id ) const {
+
+    /// <summary>
+    /// Get the values at the incident two vertices. Vertices are sorted in ascending order.
+    /// </summary>
+    /// <param name="e_id"></param>
+    /// <returns></returns>
+    std::array<FT, 2> edge_values( const Edge_handle& e_id ) const {
         const auto& [e_global_id, depth] = e_id;
         const auto df                    = depth_factor( depth );
 
@@ -408,7 +344,7 @@ class OctreeWrapper {
     /// </summary>
     /// <param name="e_id"></param>
     /// <returns></returns>
-    std::array<std::size_t, 4> edge_voxels( const Octree_edge_index& e_id ) const {
+    std::array<std::size_t, 4> edge_voxels( const Edge_handle& e_id ) const {
         const auto& [e_global_id, depth] = e_id;
         const std::size_t e_local_index  = Tables::edge_store_index[e_global_id % 3];
 
@@ -426,10 +362,10 @@ class OctreeWrapper {
         Octree::Node n2             = get_node( i + voxel_neighbors[2][0], j + voxel_neighbors[2][1], k + voxel_neighbors[2][2] );
         Octree::Node n3             = get_node( i + voxel_neighbors[3][0], j + voxel_neighbors[3][1], k + voxel_neighbors[3][2] );
 
-        const Octree_uniform_coords n0_uniform_coords = uniform_coordinates( n0 );
-        const Octree_uniform_coords n1_uniform_coords = uniform_coordinates( n1 );
-        const Octree_uniform_coords n2_uniform_coords = uniform_coordinates( n2 );
-        const Octree_uniform_coords n3_uniform_coords = uniform_coordinates( n3 );
+        const Uniform_coords n0_uniform_coords = uniform_coordinates( n0 );
+        const Uniform_coords n1_uniform_coords = uniform_coordinates( n1 );
+        const Uniform_coords n2_uniform_coords = uniform_coordinates( n2 );
+        const Uniform_coords n3_uniform_coords = uniform_coordinates( n3 );
 
         std::size_t n0_lex = lex_index( n0_uniform_coords[0], n0_uniform_coords[1], n0_uniform_coords[2], max_depth_ );
         std::size_t n1_lex = lex_index( n1_uniform_coords[0], n1_uniform_coords[1], n1_uniform_coords[2], max_depth_ );
