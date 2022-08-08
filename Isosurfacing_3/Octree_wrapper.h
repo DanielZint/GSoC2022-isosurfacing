@@ -48,6 +48,8 @@ class Octree_wrapper {
 
     FT hx_ = 0;
 
+    std::vector<Point_3> pseudo_point_cloud_;
+
     Octree octree_;
 
     // std::set<Uniform_coords> leaf_node_uniform_coordinates_;
@@ -59,8 +61,9 @@ class Octree_wrapper {
 
   public:
     Octree_wrapper( const CGAL::Bbox_3& bbox )
-        : bbox_( bbox ), offset_x_( bbox.xmin() ), offset_y_( bbox.ymin() ), offset_z_( bbox.zmin() ),
-          octree_( std::vector<Point_3> { { bbox.xmin(), bbox.ymin(), bbox.zmin() }, { bbox.xmax(), bbox.ymax(), bbox.zmax() } } ) {}
+        : bbox_( bbox ), offset_x_( bbox.xmin() ), offset_y_( bbox.ymin() ),
+          offset_z_( bbox.zmin() ), pseudo_point_cloud_ { { bbox.xmin(), bbox.ymin(), bbox.zmin() }, { bbox.xmax(), bbox.ymax(), bbox.zmax() } },
+          octree_( pseudo_point_cloud_ ) {}
 
     template<class Split_predicate>
     void refine( const Split_predicate& split_predicate ) {
